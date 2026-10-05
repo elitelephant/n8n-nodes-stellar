@@ -4,7 +4,7 @@ import type {
 	INodeType,
 	INodeTypeDescription,
 } from 'n8n-workflow';
-import { NodeConnectionType, NodeOperationError } from 'n8n-workflow';
+import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import { Keypair, Networks, Transaction } from '@stellar/stellar-sdk';
 
 export class StellarSigner implements INodeType {
@@ -18,8 +18,8 @@ export class StellarSigner implements INodeType {
 		defaults: {
 			name: 'Stellar Signer',
 		},
-		inputs: [NodeConnectionType.Main],
-		outputs: [NodeConnectionType.Main],
+		inputs: [NodeConnectionTypes.Main],
+		outputs: [NodeConnectionTypes.Main],
 		credentials: [
 			{
 				name: 'stellarWalletApi',
