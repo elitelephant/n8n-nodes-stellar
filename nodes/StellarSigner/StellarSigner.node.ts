@@ -76,7 +76,7 @@ export class StellarSigner implements INodeType {
 
 				const keypair = Keypair.fromSecret(credentials.secretKey as string);
 				const networkPassphrase = network === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET;
-				
+
 				const transaction = new Transaction(xdr, networkPassphrase);
 				transaction.sign(keypair);
 
