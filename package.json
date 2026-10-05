@@ -55,6 +55,6 @@
     "n8n-workflow": "*"
   },
   "dependencies": {
-    "@stellar/stellar-sdk": "^13.0.0"
+    "@stellar/stellar-sdk": "17.1.0"
   }
 }

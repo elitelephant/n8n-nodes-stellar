@@ -80,8 +80,8 @@ export class StellarSigner implements INodeType {
 				const transaction = new Transaction(xdr, networkPassphrase);
 				transaction.sign(keypair);
 
-				const txHash = transaction.hash().toString('hex');
-				const signedXdr = transaction.toXDR();
+				const txHash = Buffer.from(transaction.hash()).toString('hex');
+				const signedXdr = transaction.toXdr();
 
 				const item = items[itemIndex];
 				item.json = {
