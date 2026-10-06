@@ -96,7 +96,7 @@ export class StellarSigner implements INodeType {
 			} catch (error) {
 				if (this.continueOnFail()) {
 					returnData.push({
-						json: this.getInputData(itemIndex)[0].json,
+						json: items[itemIndex].json,
 						error,
 						pairedItem: itemIndex,
 					});
