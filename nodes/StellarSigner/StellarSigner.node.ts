@@ -15,6 +15,8 @@ export class StellarSigner implements INodeType {
 		icon: { light: 'file:stellarLogo.svg', dark: 'file:stellarLogo.svg' },
 		group: ['transform'],
 		version: 1,
+		// The same value as the networkName output field.
+		subtitle: '={{ $parameter["network"] === "mainnet" ? "public" : "testnet" }}',
 		description: 'Sign Stellar transactions using a wallet secret key',
 		defaults: {
 			name: 'Stellar Signer',
