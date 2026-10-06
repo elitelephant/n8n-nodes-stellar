@@ -84,15 +84,21 @@ export class StellarSigner implements INodeType {
 				const signedXdr = transaction.toXdr();
 
 				const item = items[itemIndex];
-				item.json = {
-					...item.json,
-					signedXdr,
-					txHash,
-					publicKey: keypair.publicKey(),
-					network: networkPassphrase,
+				const newItem: INodeExecutionData = {
+					json: {
+						...item.json,
+						signedXdr,
+						txHash,
+						publicKey: keypair.publicKey(),
+						network: networkPassphrase,
+					},
+					pairedItem: itemIndex,
 				};
+				if (item.binary !== undefined) {
+					newItem.binary = item.binary;
+				}
 
-				returnData.push(item);
+				returnData.push(newItem);
 			} catch (error) {
 				if (this.continueOnFail()) {
 					returnData.push({
