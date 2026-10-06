@@ -173,10 +173,11 @@ function keypairFromSecret(node: INode, secretKey: unknown, itemIndex?: number):
 		// The SDK decides first, also when the value isn't text.
 		return Keypair.fromSecret(secretKey as string);
 	} catch (error) {
-		const { problem, fix, cause } = explainInvalidSecretKey(secretKey, error);
+		const { problem, fix } = explainInvalidSecretKey(secretKey, error);
 		const message = `'Secret Key' in the Stellar Wallet API credential ${problem}`;
-		// Built from the text, the error's cause is n8n's copy of that text, so the SDK error is
-		// only the cause when explainInvalidSecretKey returns it.
+		// Built from the text, the error's cause is n8n's copy of that text, which only happens when
+		// the SDK error isn't safe to keep.
+		const cause = sdkErrorSafeToKeep(secretKey, error);
 		throw new NodeOperationError(node, cause ?? message, { itemIndex, message, description: fix });
 	}
 }
@@ -186,8 +187,6 @@ interface SecretKeyRejection {
 	problem: string;
 	// How to fix it.
 	fix: string;
-	// The SDK error, for an empty secret key and when no own check explains the problem.
-	cause?: Error;
 }
 
 // Says what is wrong with a secret key the SDK rejected. These checks only choose the text: the
@@ -198,10 +197,7 @@ function explainInvalidSecretKey(secretKey: unknown, sdkError: unknown): SecretK
 		return { problem: 'is not text', fix: ENTER_SECRET_KEY };
 	}
 	if (isBlank(secretKey)) {
-		// An empty secret key has nothing to leak, so the SDK error is the cause without the check
-		// of the last case.
-		const cause = sdkError instanceof Error ? sdkError : undefined;
-		return { problem: 'is empty', fix: ENTER_SECRET_KEY, cause };
+		return { problem: 'is empty', fix: ENTER_SECRET_KEY };
 	}
 	if (secretKey !== secretKey.trim()) {
 		return {
@@ -235,15 +231,35 @@ function explainInvalidSecretKey(secretKey: unknown, sdkError: unknown): SecretK
 		};
 	}
 	const fix = 'Copy the secret key again from your wallet.';
-	// The SDK text is added only if it doesn't contain the secret key, which SDK 17.1.0 never does.
-	if (sdkError instanceof Error && !sdkError.message.includes(secretKey)) {
-		return {
-			problem: `looks like a typo (Stellar SDK: ${sdkError.message})`,
-			fix,
-			cause: sdkError,
-		};
+	// The SDK text is added only when the SDK error is safe to keep as the cause.
+	const keptError = sdkErrorSafeToKeep(secretKey, sdkError);
+	if (keptError !== undefined) {
+		return { problem: `looks like a typo (Stellar SDK: ${keptError.message})`, fix };
 	}
 	return { problem: 'looks like a typo', fix };
+}
+
+// The SDK error, if it is safe to keep: its text doesn't contain the secret key, which SDK 17.1.0
+// never does. A value that isn't text is compared as text and, if it is an object, as JSON too; if
+// either conversion fails, nothing is compared and the SDK error is kept anyway. An empty secret
+// key, or one with only spaces, has nothing to leak and skips the check, which would almost always
+// drop its SDK error: every text contains the empty text, and almost every one contains a space.
+function sdkErrorSafeToKeep(secretKey: unknown, sdkError: unknown): Error | undefined {
+	if (!(sdkError instanceof Error)) {
+		return undefined;
+	}
+	if (isBlank(secretKey)) {
+		return sdkError;
+	}
+	try {
+		const enteredAsText = [String(secretKey)];
+		if (typeof secretKey === 'object' && secretKey !== null) {
+			enteredAsText.push(JSON.stringify(secretKey));
+		}
+		return enteredAsText.some((text) => sdkError.message.includes(text)) ? undefined : sdkError;
+	} catch {
+		return sdkError;
+	}
 }
 
 function parseTransaction(
