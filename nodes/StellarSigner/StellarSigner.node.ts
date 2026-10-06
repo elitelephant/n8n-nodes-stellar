@@ -1,12 +1,17 @@
 import type {
+	ICredentialsDecrypted,
+	ICredentialTestFunctions,
 	IExecuteFunctions,
 	INode,
+	INodeCredentialTestResult,
 	INodeExecutionData,
 	INodeType,
 	INodeTypeDescription,
 } from 'n8n-workflow';
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import { Keypair, Networks, Transaction } from '@stellar/stellar-sdk';
+
+const SECRET_KEY_HINT = 'a Stellar secret key has 56 characters and starts with S';
 
 export class StellarSigner implements INodeType {
 	description: INodeTypeDescription = {
@@ -27,6 +32,7 @@ export class StellarSigner implements INodeType {
 			{
 				name: 'stellarWalletApi',
 				required: true,
+				testedBy: 'stellarWalletApiTest',
 			},
 		],
 		properties: [
@@ -56,6 +62,28 @@ export class StellarSigner implements INodeType {
 				description: 'The Stellar network to use',
 			},
 		],
+	};
+
+	methods = {
+		credentialTest: {
+			// Reads the secret key offline: the credential doesn't know the network, so the
+			// account isn't looked up.
+			async stellarWalletApiTest(
+				this: ICredentialTestFunctions,
+				credential: ICredentialsDecrypted,
+			): Promise<INodeCredentialTestResult> {
+				try {
+					const keypair = Keypair.fromSecret(credential.data?.secretKey as string);
+					return {
+						status: 'OK',
+						message: `Valid secret key for public key ${keypair.publicKey()}`,
+					};
+				} catch {
+					// As in keypairFromSecret, the SDK error is left out of the message.
+					return { status: 'Error', message: `Invalid 'Secret Key': ${SECRET_KEY_HINT}` };
+				}
+			},
+		},
 	};
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
@@ -138,8 +166,7 @@ function keypairFromSecret(node: INode, secretKey: string, itemIndex: number): K
 		// The SDK error is left out so that nothing about the secret can reach the message.
 		throw new NodeOperationError(node, 'Invalid secret key in the Stellar Wallet API credential', {
 			itemIndex,
-			description:
-				"Check the credential's 'Secret Key': a Stellar secret key has 56 characters and starts with S.",
+			description: `Check the credential's 'Secret Key': ${SECRET_KEY_HINT}.`,
 		});
 	}
 }
