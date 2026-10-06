@@ -15,7 +15,7 @@ export class StellarWalletApi implements ICredentialType {
 				password: true,
 			},
 			default: '',
-			placeholder: 'SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+			placeholder: 'e.g. SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
 			description: 'The secret key of your Stellar wallet (starts with S)',
 		},
 	];
