@@ -1,7 +1,7 @@
 {
   "name": "n8n-nodes-stellar",
   "version": "0.1.1",
-  "description": "Stellar nodes for n8n",
+  "description": "Sign Stellar transactions in n8n workflows",
   "keywords": [
     "n8n-community-node-package"
   ],
