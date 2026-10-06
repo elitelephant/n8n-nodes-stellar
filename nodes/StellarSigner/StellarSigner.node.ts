@@ -1,5 +1,6 @@
 import type {
 	IExecuteFunctions,
+	INode,
 	INodeExecutionData,
 	INodeType,
 	INodeTypeDescription,
@@ -71,13 +72,19 @@ export class StellarSigner implements INodeType {
 				const network = this.getNodeParameter('network', itemIndex, 'mainnet') as string;
 
 				if (!xdr) {
-					throw new NodeOperationError(this.getNode(), 'Transaction XDR is required');
+					throw new NodeOperationError(this.getNode(), 'Transaction XDR is required', {
+						itemIndex,
+					});
 				}
 
-				const keypair = Keypair.fromSecret(credentials.secretKey as string);
+				const keypair = keypairFromSecret(
+					this.getNode(),
+					credentials.secretKey as string,
+					itemIndex,
+				);
 				const networkPassphrase = network === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET;
 
-				const transaction = new Transaction(xdr, networkPassphrase);
+				const transaction = parseTransaction(this.getNode(), xdr, networkPassphrase, itemIndex);
 				transaction.sign(keypair);
 
 				const txHash = Buffer.from(transaction.hash()).toString('hex');
@@ -100,24 +107,51 @@ export class StellarSigner implements INodeType {
 
 				returnData.push(newItem);
 			} catch (error) {
+				// A NodeOperationError passes through unchanged and keeps its own itemIndex.
+				const nodeError = new NodeOperationError(this.getNode(), error, { itemIndex });
 				if (this.continueOnFail()) {
 					returnData.push({
 						json: items[itemIndex].json,
-						error,
+						error: nodeError,
 						pairedItem: itemIndex,
 					});
 				} else {
-					if (error.context) {
-						error.context.itemIndex = itemIndex;
-						throw error;
-					}
-					throw new NodeOperationError(this.getNode(), error, {
-						itemIndex,
-					});
+					throw nodeError;
 				}
 			}
 		}
 
 		return [returnData];
+	}
+}
+
+function keypairFromSecret(node: INode, secretKey: string, itemIndex: number): Keypair {
+	try {
+		return Keypair.fromSecret(secretKey);
+	} catch {
+		// The SDK error is left out so that nothing about the secret can reach the message.
+		throw new NodeOperationError(node, 'Invalid secret key in the Stellar Wallet API credential', {
+			itemIndex,
+			description:
+				"Check the credential's 'Secret Key': a Stellar secret key has 56 characters and starts with S.",
+		});
+	}
+}
+
+function parseTransaction(
+	node: INode,
+	xdr: string,
+	networkPassphrase: string,
+	itemIndex: number,
+): Transaction {
+	try {
+		return new Transaction(xdr, networkPassphrase);
+	} catch (error) {
+		throw new NodeOperationError(node, error, {
+			itemIndex,
+			message: 'Invalid or unsupported transaction XDR',
+			description:
+				"'Transaction XDR' must be a base64 transaction envelope. Fee bump transactions are not supported.",
+		});
 	}
 }
