@@ -175,24 +175,24 @@ function keypairFromSecret(node: INode, secretKey: unknown, itemIndex?: number):
 	} catch (error) {
 		const { problem, fix } = explainInvalidSecretKey(secretKey, error);
 		const message = `'Secret Key' in the Stellar Wallet API credential ${problem}`;
-		// Built from the text, the error's cause is n8n's copy of that text, which only happens when
-		// the SDK error isn't safe to keep.
+		// Without a safe SDK error, the error is built from the message, and n8n sets a copy of it
+		// as the cause.
 		const cause = sdkErrorSafeToKeep(secretKey, error);
 		throw new NodeOperationError(node, cause ?? message, { itemIndex, message, description: fix });
 	}
 }
 
-interface SecretKeyRejection {
-	// Completes "'Secret Key' …" without repeating the secret key.
+interface Rejection {
+	// Completes "'Secret Key' …" or "'Transaction XDR' …" without repeating the value.
 	problem: string;
 	// How to fix it.
 	fix: string;
 }
 
 // Says what is wrong with a secret key the SDK rejected. These checks only choose the text: the
-// SDK alone decides which secret keys are valid. Of the secret key, only its first character (G)
-// and its length are mentioned.
-function explainInvalidSecretKey(secretKey: unknown, sdkError: unknown): SecretKeyRejection {
+// SDK alone decides which secret keys are valid. The messages only mention the secret key's first
+// character and its length.
+function explainInvalidSecretKey(secretKey: unknown, sdkError: unknown): Rejection {
 	if (typeof secretKey !== 'string') {
 		return { problem: 'is not text', fix: ENTER_SECRET_KEY };
 	}
@@ -239,11 +239,11 @@ function explainInvalidSecretKey(secretKey: unknown, sdkError: unknown): SecretK
 	return { problem: 'looks like a typo', fix };
 }
 
-// The SDK error, if it is safe to keep: its text doesn't contain the secret key, which SDK 17.1.0
-// never does. A value that isn't text is compared as text and, if it is an object, as JSON too; if
-// either conversion fails, nothing is compared and the SDK error is kept anyway. An empty secret
-// key, or one with only spaces, has nothing to leak and skips the check, which would almost always
-// drop its SDK error: every text contains the empty text, and almost every one contains a space.
+// Returns the SDK error if its text doesn't contain the secret key. SDK 17.1.0 never puts the key
+// in its errors. A value that isn't text is compared as text, and an object also as JSON. If a
+// conversion fails, nothing is compared and the error is kept. A blank secret key skips the check.
+// It has nothing to leak, and the check would almost always drop its error, because every text
+// contains the empty text and almost every one contains a space.
 function sdkErrorSafeToKeep(secretKey: unknown, sdkError: unknown): Error | undefined {
 	if (!(sdkError instanceof Error)) {
 		return undefined;
@@ -283,7 +283,7 @@ function parseTransaction(
 
 // Says what is wrong with a transaction XDR the SDK rejected. These checks only choose the text:
 // the SDK alone decides which XDR is valid.
-function explainInvalidTransactionXdr(transactionXdr: unknown): { problem: string; fix: string } {
+function explainInvalidTransactionXdr(transactionXdr: unknown): Rejection {
 	if (typeof transactionXdr !== 'string') {
 		return {
 			problem: 'is not text',

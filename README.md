@@ -26,7 +26,7 @@ Parameters:
 - **Transaction XDR** (`xdr`): the unsigned transaction, as base64 XDR.
 - **Network** (`network`): Mainnet or Testnet. The transaction is signed for this network.
 
-> **Mainnet is the default network.** On Mainnet, a signed transaction moves real funds once it is submitted. Check the **Network** parameter before you run a workflow, and try it on Testnet first.
+> **Mainnet is the default network.** On Mainnet, a signed transaction moves real funds once it is submitted. Check the **Network** parameter before you run a workflow. Try it on Testnet first.
 
 Each output item keeps the fields of its input item and adds:
 

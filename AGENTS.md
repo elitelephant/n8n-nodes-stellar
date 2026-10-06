@@ -15,7 +15,7 @@ Community nodes can also be submitted for approval to be used on n8n Cloud
 version. In that case there are rules that the node needs to follow in order to
 be approved. This package is not eligible for n8n Cloud: it has a runtime
 dependency (`@stellar/stellar-sdk`) and its own ESLint config, so don't plan
-for a Cloud submission
+for a Cloud submission.
 
 ## Important notes
 
@@ -57,8 +57,8 @@ So it looks something like this:
 └── ...
 ```
 
-It's important to note that `package.json` has a special field `n8n` that have
-information about nodes and credentials in a package:
+`package.json` has an `n8n` field that lists the package's nodes and
+credentials:
 
 ```json
 {
