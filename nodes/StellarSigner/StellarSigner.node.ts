@@ -17,7 +17,7 @@ export class StellarSigner implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Stellar Signer',
 		name: 'stellarSigner',
-		icon: { light: 'file:stellarLogo.svg', dark: 'file:stellarLogo.svg' },
+		icon: { light: 'file:stellarLogo.svg', dark: 'file:stellarLogo.dark.svg' },
 		group: ['transform'],
 		version: 1,
 		// The same value as the networkName output field.
