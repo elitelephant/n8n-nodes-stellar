@@ -16,7 +16,7 @@
     "url": "https://github.com/joaquinsoza/n8n-nodes-stellar.git"
   },
   "engines": {
-    "node": ">=20.15"
+    "node": ">=24.0.0"
   },
   "main": "index.js",
   "scripts": {
