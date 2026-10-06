@@ -11,7 +11,7 @@ import type {
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import { Keypair, Networks, Transaction } from '@stellar/stellar-sdk';
 
-const SECRET_KEY_HINT = 'a Stellar secret key has 56 characters and starts with S';
+const ENTER_SECRET_KEY = "Enter the account's secret key: 56 characters, starting with S.";
 
 export class StellarSigner implements INodeType {
 	description: INodeTypeDescription = {
@@ -74,15 +74,17 @@ export class StellarSigner implements INodeType {
 				this: ICredentialTestFunctions,
 				credential: ICredentialsDecrypted,
 			): Promise<INodeCredentialTestResult> {
+				const secretKey = credential.data?.secretKey;
 				try {
-					const keypair = Keypair.fromSecret(credential.data?.secretKey as string);
+					// The SDK decides first, also when the value isn't text.
+					const keypair = Keypair.fromSecret(secretKey as string);
 					return {
 						status: 'OK',
 						message: `Valid secret key for public key ${keypair.publicKey()}`,
 					};
-				} catch {
-					// As in keypairFromSecret, the SDK error is left out of the message.
-					return { status: 'Error', message: `Invalid 'Secret Key': ${SECRET_KEY_HINT}` };
+				} catch (error) {
+					const { problem, fix } = explainInvalidSecretKey(secretKey, error);
+					return { status: 'Error', message: `'Secret Key' ${problem}. ${fix}` };
 				}
 			},
 		},
@@ -109,11 +111,7 @@ export class StellarSigner implements INodeType {
 					});
 				}
 
-				const keypair = keypairFromSecret(
-					this.getNode(),
-					credentials.secretKey as string,
-					itemIndex,
-				);
+				const keypair = keypairFromSecret(this.getNode(), credentials.secretKey, itemIndex);
 				const isMainnet = network === 'mainnet';
 				const networkPassphrase = isMainnet ? Networks.PUBLIC : Networks.TESTNET;
 				// The SDK's network names (Networks.PUBLIC, Networks.TESTNET), in lowercase.
@@ -161,16 +159,79 @@ export class StellarSigner implements INodeType {
 	}
 }
 
-function keypairFromSecret(node: INode, secretKey: string, itemIndex: number): Keypair {
+function keypairFromSecret(node: INode, secretKey: unknown, itemIndex: number): Keypair {
 	try {
-		return Keypair.fromSecret(secretKey);
-	} catch {
-		// The SDK error is left out so that nothing about the secret can reach the message.
-		throw new NodeOperationError(node, 'Invalid secret key in the Stellar Wallet API credential', {
-			itemIndex,
-			description: `Check the credential's 'Secret Key': ${SECRET_KEY_HINT}.`,
-		});
+		// The SDK decides first, also when the value isn't text.
+		return Keypair.fromSecret(secretKey as string);
+	} catch (error) {
+		const { problem, fix, cause } = explainInvalidSecretKey(secretKey, error);
+		const message = `'Secret Key' in the Stellar Wallet API credential ${problem}`;
+		// Built from the text, the error's cause is n8n's copy of that text, so the SDK error is
+		// only the cause when explainInvalidSecretKey returns it.
+		throw new NodeOperationError(node, cause ?? message, { itemIndex, message, description: fix });
 	}
+}
+
+interface SecretKeyRejection {
+	// Completes "'Secret Key' …" without repeating the secret key.
+	problem: string;
+	// How to fix it.
+	fix: string;
+	// The SDK error, only when no own check explains the problem.
+	cause?: Error;
+}
+
+// Says what is wrong with a secret key the SDK rejected. These checks only choose the text: the
+// SDK alone decides which secret keys are valid. Of the secret key, only its first character (G)
+// and its length are mentioned.
+function explainInvalidSecretKey(secretKey: unknown, sdkError: unknown): SecretKeyRejection {
+	if (typeof secretKey !== 'string') {
+		return { problem: 'is not text', fix: ENTER_SECRET_KEY };
+	}
+	if (secretKey.trim() === '') {
+		return { problem: 'is empty', fix: ENTER_SECRET_KEY };
+	}
+	if (secretKey !== secretKey.trim()) {
+		return {
+			problem: 'has spaces or line breaks at the start or end',
+			fix: 'Remove the spaces or line breaks around the secret key.',
+		};
+	}
+	if (secretKey.startsWith('G')) {
+		return {
+			problem: 'looks like a public key',
+			fix: "Enter the account's secret key, which starts with S, not its public key, which starts with G.",
+		};
+	}
+	if (!secretKey.startsWith('S')) {
+		return {
+			problem: "doesn't start with S",
+			fix: 'A Stellar secret key starts with S and has 56 characters.',
+		};
+	}
+	if (secretKey.length !== 56) {
+		const characters = secretKey.length === 1 ? '1 character' : `${secretKey.length} characters`;
+		return {
+			problem: `has ${characters} instead of 56`,
+			fix: 'Check that the whole secret key was copied: it has 56 characters and starts with S.',
+		};
+	}
+	if (/[^A-Z2-7]/.test(secretKey)) {
+		return {
+			problem: "has characters a Stellar secret key doesn't use",
+			fix: 'A Stellar secret key only uses capital letters A to Z and digits 2 to 7.',
+		};
+	}
+	const fix = 'Copy the secret key again from your wallet.';
+	// The SDK text is added only if it doesn't contain the secret key, which SDK 17.1.0 never does.
+	if (sdkError instanceof Error && !sdkError.message.includes(secretKey)) {
+		return {
+			problem: `looks like a typo (Stellar SDK: ${sdkError.message})`,
+			fix,
+			cause: sdkError,
+		};
+	}
+	return { problem: 'looks like a typo', fix };
 }
 
 function parseTransaction(
