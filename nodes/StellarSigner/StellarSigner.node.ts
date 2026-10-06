@@ -82,7 +82,10 @@ export class StellarSigner implements INodeType {
 					credentials.secretKey as string,
 					itemIndex,
 				);
-				const networkPassphrase = network === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET;
+				const isMainnet = network === 'mainnet';
+				const networkPassphrase = isMainnet ? Networks.PUBLIC : Networks.TESTNET;
+				// The SDK's network names (Networks.PUBLIC, Networks.TESTNET), in lowercase.
+				const networkName = isMainnet ? 'public' : 'testnet';
 
 				const transaction = parseTransaction(this.getNode(), xdr, networkPassphrase, itemIndex);
 				transaction.sign(keypair);
@@ -98,6 +101,7 @@ export class StellarSigner implements INodeType {
 						txHash,
 						publicKey: keypair.publicKey(),
 						network: networkPassphrase,
+						networkName,
 					},
 					pairedItem: itemIndex,
 				};
