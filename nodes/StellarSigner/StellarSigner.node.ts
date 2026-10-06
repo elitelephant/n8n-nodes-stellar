@@ -22,7 +22,7 @@ export class StellarSigner implements INodeType {
 		group: ['transform'],
 		version: 1,
 		// The same value as the networkName output field.
-		subtitle: '={{ $parameter["network"] === "mainnet" ? "public" : "testnet" }}',
+		subtitle: '={{ $parameter["network"] }}',
 		description: 'Sign Stellar transactions using a wallet secret key',
 		defaults: {
 			name: 'Stellar Signer',
@@ -53,15 +53,15 @@ export class StellarSigner implements INodeType {
 				type: 'options',
 				options: [
 					{
-						name: 'Mainnet',
-						value: 'mainnet',
+						name: 'Public',
+						value: 'public',
 					},
 					{
 						name: 'Testnet',
 						value: 'testnet',
 					},
 				],
-				default: 'mainnet',
+				default: 'public',
 				description: 'The Stellar network to use',
 			},
 		],
@@ -107,11 +107,9 @@ export class StellarSigner implements INodeType {
 		for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
 			try {
 				const transactionXdr = this.getNodeParameter('xdr', itemIndex, '');
-				const network = this.getNodeParameter('network', itemIndex, 'mainnet') as string;
-				const isMainnet = network === 'mainnet';
-				const networkPassphrase = isMainnet ? Networks.PUBLIC : Networks.TESTNET;
 				// The SDK's network names (Networks.PUBLIC, Networks.TESTNET), in lowercase.
-				const networkName = isMainnet ? 'public' : 'testnet';
+				const networkName = this.getNodeParameter('network', itemIndex, 'public');
+				const networkPassphrase = passphraseFor(this.getNode(), networkName, itemIndex);
 
 				// An empty XDR fails before the secret key is read. The SDK rejects it too, so
 				// parseTransaction throws here.
@@ -165,6 +163,21 @@ export class StellarSigner implements INodeType {
 
 		return [returnData];
 	}
+}
+
+// Any other value, such as the 0.1.1 value mainnet, fails instead of signing for a network the user
+// didn't choose.
+function passphraseFor(node: INode, networkName: unknown, itemIndex: number): string {
+	if (networkName === 'public') {
+		return Networks.PUBLIC;
+	}
+	if (networkName === 'testnet') {
+		return Networks.TESTNET;
+	}
+	throw new NodeOperationError(node, "'Network' must be public or testnet", {
+		itemIndex,
+		description: 'Choose public or testnet in the Network parameter.',
+	});
 }
 
 // The item index is left out for an empty secret key, which is checked before the items.

@@ -9,14 +9,14 @@ The Stellar Signer node signs transactions with the secret key stored in this cr
   funds. Each key is 56 characters long.
 - The credential doesn't store a network. The node signs with this secret key for the network chosen
   in its **Network** parameter.
-- The same secret key works on Mainnet and on Testnet, but each network has its own accounts: an
-  account created on Testnet doesn't exist on Mainnet.
+- The same secret key works on `public` and on `testnet`, but each network has its own accounts: an
+  account created on `testnet` doesn't exist on `public`.
 - The node returns the public key that matches the secret key in its `publicKey` output field. It
   never returns the secret key.
 
-## Get a secret key on Testnet
+## Get a secret key on testnet
 
-Testnet works like Mainnet but doesn't connect to real money. To create a Testnet account:
+`testnet` works like `public` but doesn't connect to real money. To create a testnet account:
 
 1. Open the [Create Account Keypair](https://lab.stellar.org/account/create) page of Stellar Lab.
    Check that the network in the upper right corner of the page is Testnet.
@@ -35,9 +35,9 @@ the account again or create a new one.
 - Never share the secret key. Keep it only in this credential: don't paste it into node parameters
   or workflow notes, which are saved as part of the workflow.
 - Use a separate account for each workflow or purpose, with only the funds it needs.
-- Try your workflow on Testnet first. On Mainnet, a signed transaction moves real funds once it is
-  submitted to the network.
-- Mainnet is the node's default network. Check the **Network** parameter before you run a workflow.
+- Try your workflow on `testnet` first. On `public`, a signed transaction moves real funds once it
+  is submitted to the network.
+- `public` is the node's default network. Check the **Network** parameter before you run a workflow.
 
 More about accounts and keys:
 [Create an account](https://developers.stellar.org/docs/build/guides/transactions/create-account) in
