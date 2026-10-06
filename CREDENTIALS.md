@@ -16,7 +16,7 @@ Testnet works like Mainnet but doesn't connect to real money. To create a Testne
 1. Open the [Create Account Keypair](https://lab.stellar.org/account/create) page of Stellar Lab. Check that the network in the upper right corner of the page is Testnet.
 2. Click **Generate keypair**.
 3. Click **Fund account with Friendbot** to add 10,000 test XLM to the account.
-4. Paste the secret key into the **Secret Key** field of this credential, and save it. When you save it, n8n checks that the secret key is valid.
+4. Paste the secret key into the **Secret Key** field of this credential, and save it. When you save it, n8n checks that the secret key is valid, but on success it only shows _Connection tested successfully_. To see which account the secret key belongs to, look at the `publicKey` field in the Stellar Signer's output after it signs a transaction.
 
 Testnet is usually reset 2 to 4 times a year, and a reset deletes every account. After a reset, fund the account again or create a new one.
 
