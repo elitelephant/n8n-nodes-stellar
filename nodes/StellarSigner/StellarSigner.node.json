@@ -1,0 +1,23 @@
+{
+	"node": "n8n-nodes-stellar.stellarSigner",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Finance & Accounting"],
+	"alias": [
+		"XLM",
+		"XDR",
+		"Blockchain",
+		"Crypto",
+		"Cryptocurrency",
+		"Web3",
+		"Wallet",
+		"Transaction",
+		"Lumens"
+	],
+	"resources": {
+		"primaryDocumentation": [{ "url": "https://github.com/yripper/n8n-nodes-stellar" }],
+		"credentialDocumentation": [
+			{ "url": "https://github.com/yripper/n8n-nodes-stellar/blob/master/CREDENTIALS.md" }
+		]
+	}
+}
