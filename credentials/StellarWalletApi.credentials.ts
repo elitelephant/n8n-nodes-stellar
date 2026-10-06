@@ -4,7 +4,7 @@ export class StellarWalletApi implements ICredentialType {
 	name = 'stellarWalletApi';
 	displayName = 'Stellar Wallet API';
 
-	documentationUrl = 'https://developers.stellar.org/docs/fundamentals/wallets';
+	documentationUrl = 'https://github.com/yripper/n8n-nodes-stellar/blob/master/CREDENTIALS.md';
 
 	properties: INodeProperties[] = [
 		{
