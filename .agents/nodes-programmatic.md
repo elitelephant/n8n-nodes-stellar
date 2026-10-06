@@ -37,25 +37,25 @@ async execute(
         pairedItem: { item: i },
       });
     } catch (error) {
+      // Implement a check to see what error we have
+      const isApiError = true;
+      // Use NodeApiError for API-related errors
+      // and NodeOperationError for configuration/validation errors
+      const nodeError = isApiError
+        ? new NodeApiError(this.getNode(), error as Error, { itemIndex: i })
+        : new NodeOperationError(this.getNode(), error as Error, { itemIndex: i });
+
       if (this.continueOnFail()) {
-        // Keep the input's data and attach the error to the item
+        // Keep the input's data and attach the same error to the item
         returnData.push({
           json: items[i].json,
-          error: new NodeOperationError(this.getNode(), error as Error, { itemIndex: i }),
+          error: nodeError,
           pairedItem: { item: i },
         });
         continue;
       }
 
-      // Implement a check to see what error we have
-      const isApiError = true;
-      // Use NodeApiError for API-related errors
-      if (isApiError) {
-        throw new NodeApiError(this.getNode(), error as Error, { itemIndex: i });
-      }
-
-      // Use NodeOperationError for configuration/validation errors
-      throw new NodeOperationError(this.getNode(), error as Error, { itemIndex: i });
+      throw nodeError;
     }
   }
 
