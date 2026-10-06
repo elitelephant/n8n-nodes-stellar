@@ -2,20 +2,17 @@
 
 ## Overview
 
-Community nodes depend on `n8n-workflow` package that has different interfaces,
-classes and helper functions.
+Community nodes depend on `n8n-workflow` package that has different interfaces, classes and helper
+functions.
 
-Nodes can be built using one of two styles. To identify which style an
-existing node uses:
+Nodes can be built using one of two styles. To identify which style an existing node uses:
 
-- **Declarative-style** — no `execute` method. Instead, the node has
-  `requestDefaults` and parameters use `routing` (with `routing.request`,
-  `routing.send.preSend`, `routing.output.postReceive`, etc.) to
-  describe HTTP calls. See `.agents/nodes-declarative.md`
-- **Programmatic-style** — has an `async execute(this: IExecuteFunctions)`
-  method that manually calls APIs (via `this.helpers.httpRequest` /
-  `httpRequestWithAuthentication`), loops over items, and builds the
-  return array. See `.agents/nodes-programmatic.md`
+- **Declarative-style** — no `execute` method. Instead, the node has `requestDefaults` and
+  parameters use `routing` (with `routing.request`, `routing.send.preSend`,
+  `routing.output.postReceive`, etc.) to describe HTTP calls. See `.agents/nodes-declarative.md`
+- **Programmatic-style** — has an `async execute(this: IExecuteFunctions)` method that manually
+  calls APIs (via `this.helpers.httpRequest` / `httpRequestWithAuthentication`), loops over items,
+  and builds the return array. See `.agents/nodes-programmatic.md`
 
 ## Node description
 
@@ -29,8 +26,7 @@ Nodes have `description` which defines:
 
 and an optional `execute` function for programmatic-style nodes.
 
-Example node description (simplified, using WordPress **only as an
-example**):
+Example node description (simplified, using WordPress **only as an example**):
 
 ```typescript
 description: INodeTypeDescription = {
@@ -74,25 +70,21 @@ description: INodeTypeDescription = {
 ## Description fields
 
 - `inputs` and `outputs` specify which inputs and outputs a node has.
-  - **Most nodes will need only 1 main input and 1 main output, unless
-    there is specific reason to have something else** (e.g. a node like
-    `If` that has a `true` and `false` outputs).
+  - **Most nodes will need only 1 main input and 1 main output, unless there is specific reason to
+    have something else** (e.g. a node like `If` that has a `true` and `false` outputs).
 - `usableAsTool`
-  - Set to `true` to allow n8n to use this node as a tool for the AI
-    agent.
-  - Set to `false` or omit this if node works heavily with **binary
-    data** which tools don't support
-  - The Stellar Signer declares `usableAsTool: false` because it signs
-    with a secret key. `n8n-workflow` 2.x types the property as
-    `true | UsableAsToolDescription`, so a bare `false` fails to compile;
-    the node uses `false as unknown as true` with a one-line comment
+  - Set to `true` to allow n8n to use this node as a tool for the AI agent.
+  - Set to `false` or omit this if node works heavily with **binary data** which tools don't support
+  - The Stellar Signer declares `usableAsTool: false` because it signs with a secret key.
+    `n8n-workflow` 2.x types the property as `true | UsableAsToolDescription`, so a bare `false`
+    fails to compile; the node uses `false as unknown as true` with a one-line comment
 - `properties` define the UI parameters
-  - Use the convention: first a **"Resource"** parameter and for each resource an **"Operation"** parameter.
-  - You can choose to not follow this convention **ONLY if it's not
-    applicable to the node you're developing** (i.e. data transformation
-    nodes, etc.)
-  - The Stellar Signer has a single action, signing a transaction, so it
-    has no Resource or Operation parameter
+  - Use the convention: first a **"Resource"** parameter and for each resource an **"Operation"**
+    parameter.
+  - You can choose to not follow this convention **ONLY if it's not applicable to the node you're
+    developing** (i.e. data transformation nodes, etc.)
+  - The Stellar Signer has a single action, signing a transaction, so it has no Resource or
+    Operation parameter
 
 ## Resource and operation pattern
 
@@ -176,29 +168,25 @@ export const postFields: INodeProperties[] = [
 
 **Important**:
 
-- In a real node, replace `post`, `Title`, `Content`, etc. with the
-  **real names** from the target API.
-- Do not reuse these exact WordPress-specific field names unless the
-  node is actually for WordPress.
-- Remember that these examples are **incomplete** and n8n provides a lot
-  of options for defining properties. Refer to their docs, when in doubt
+- In a real node, replace `post`, `Title`, `Content`, etc. with the **real names** from the target
+  API.
+- Do not reuse these exact WordPress-specific field names unless the node is actually for WordPress.
+- Remember that these examples are **incomplete** and n8n provides a lot of options for defining
+  properties. Refer to their docs, when in doubt
 
 ## General guidelines
 
-- `icon` property can either be a string, which starts with `file:` and
-  contains a path to a PNG or an SVG. That path **is relative to the current
-  file**, you can reference icons in other folders: `file:../icon.svg`. If the
-  node has different icons for light and dark mode, provide an object for the
-  `icon` property: `{ light: 'file:icon.light.svg', dark: 'file:icon.dark.svg' }`
-- For operations that are supposed to return multiple items, like "Get Many
-  Posts", make sure you return those items, instead of single object that has
-  them. I.e. if you have an object like `{ data: [{ ... }, { ... }], count: 2 }`,
-  then return the items inside `data` array
-- If the API response is complex, you can add a "Simplify Output" toggle. When
-  it's `false` - return the raw response. If it's `true` - return a more
-  user-friendly response with only the essential data
-- For "Get Many" operations add "Return All" toggle that would return all of
-  the items, and a "Limit" parameter to limit the number of items, if "Return
-  All" is `false`
+- `icon` property can either be a string, which starts with `file:` and contains a path to a PNG or
+  an SVG. That path **is relative to the current file**, you can reference icons in other folders:
+  `file:../icon.svg`. If the node has different icons for light and dark mode, provide an object for
+  the `icon` property: `{ light: 'file:icon.light.svg', dark: 'file:icon.dark.svg' }`
+- For operations that are supposed to return multiple items, like "Get Many Posts", make sure you
+  return those items, instead of single object that has them. I.e. if you have an object like
+  `{ data: [{ ... }, { ... }], count: 2 }`, then return the items inside `data` array
+- If the API response is complex, you can add a "Simplify Output" toggle. When it's `false` - return
+  the raw response. If it's `true` - return a more user-friendly response with only the essential
+  data
+- For "Get Many" operations add "Return All" toggle that would return all of the items, and a
+  "Limit" parameter to limit the number of items, if "Return All" is `false`
 - Don't forget to mark required properties as `required: true`
 - Use camelCase for property names

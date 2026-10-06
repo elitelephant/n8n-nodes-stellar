@@ -5,11 +5,10 @@
 Nodes have versions, defined in the `version` property:
 
 - If the node has only one version -> `version: 1`
-- If the node supports **light versioning** -> `version: [1, 1.1, 1.2]`
-  etc.
+- If the node supports **light versioning** -> `version: [1, 1.1, 1.2]` etc.
 
-Use versioning when you make **breaking changes** that should not alter
-the behavior of existing workflows.
+Use versioning when you make **breaking changes** that should not alter the behavior of existing
+workflows.
 
 ## Checking version in code
 
@@ -26,9 +25,9 @@ async execute(this: IExecuteFunctions) {
 
 ## Full versioning
 
-For more complex changes, nodes can extend `VersionedNodeType`, where
-each "full" version is a separate implementation. This is called **full
-versioning** and is **only supported for programmatic-style nodes**:
+For more complex changes, nodes can extend `VersionedNodeType`, where each "full" version is a
+separate implementation. This is called **full versioning** and is **only supported for
+programmatic-style nodes**:
 
 ```typescript
 // If.node.ts
@@ -85,12 +84,10 @@ export class IfV1 implements INodeType {
 
 ## Important rules
 
-- **Declarative-style nodes do not support full versioning**, only light
-  versioning
+- **Declarative-style nodes do not support full versioning**, only light versioning
 - Do **not** introduce full versioning unless:
   - The node already uses it, or
   - You are explicitly asked to add a new full version, or
-  - You're doing a complete **rewrite** of the node from scratch and it
-    has different resources/operations compared to last version
-- **Do NOT** introduce full versioning when writing the very first
-  version of the node
+  - You're doing a complete **rewrite** of the node from scratch and it has different
+    resources/operations compared to last version
+- **Do NOT** introduce full versioning when writing the very first version of the node

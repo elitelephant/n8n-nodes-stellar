@@ -1,20 +1,18 @@
 # Declarative nodes
 
-Preferred for most integrations that simply call external APIs. The nodes
-in this package use the Stellar SDK, so they are programmatic-style (see
-`.agents/nodes-programmatic.md`); this guide is kept for reference.
+Preferred for most integrations that simply call external APIs. The nodes in this package use the
+Stellar SDK, so they are programmatic-style (see `.agents/nodes-programmatic.md`); this guide is
+kept for reference.
 
 Also read `.agents/nodes.md` for shared node anatomy and conventions.
 
 ## When to use
 
 - The integration is mostly simple HTTP/REST requests and responses
-- You can express the behavior by mapping parameters to
-  URL/query/body/headers
+- You can express the behavior by mapping parameters to URL/query/body/headers
 
-If you need multiple dependent API calls, complex control flow, or heavy
-transformations, use programmatic-style instead (see
-`.agents/nodes-programmatic.md`).
+If you need multiple dependent API calls, complex control flow, or heavy transformations, use
+programmatic-style instead (see `.agents/nodes-programmatic.md`).
 
 ## What you define
 
@@ -102,13 +100,13 @@ postReceive: [
 
 ## Pre-send transformations
 
-You can also use `routing.send.preSend` to change the request before
-sending (e.g. add custom headers or body transformations).
+You can also use `routing.send.preSend` to change the request before sending (e.g. add custom
+headers or body transformations).
 
 ## Guidelines
 
-- Prefer **declarative transformations** like `setKeyValue`, `sort`, etc
-  (there are other transformations that are not in the example).
+- Prefer **declarative transformations** like `setKeyValue`, `sort`, etc (there are other
+  transformations that are not in the example).
 - Only add custom functions when necessary.
-- Declarative-style nodes only support **light versioning** (not full
-  versioning). See `.agents/versioning.md` for details.
+- Declarative-style nodes only support **light versioning** (not full versioning). See
+  `.agents/versioning.md` for details.

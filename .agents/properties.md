@@ -2,9 +2,8 @@
 
 ## Expressions
 
-Parameter values can be expressions when they start with `=`. Everything
-inside `{{ ... }}` is evaluated as JavaScript. Common (but not all)
-special variables:
+Parameter values can be expressions when they start with `=`. Everything inside `{{ ... }}` is
+evaluated as JavaScript. Common (but not all) special variables:
 
 - `$value` - the value of the current parameter
 - `$parameter` - object with all of the parameter values (key = name)
@@ -70,8 +69,8 @@ You can also show/hide based on the node's version using `@version`:
 
 ## Loading dynamic options
 
-Most properties are entirely defined in the code, but sometimes some
-data needs to be fetched dynamically. For that case, you can use one of:
+Most properties are entirely defined in the code, but sometimes some data needs to be fetched
+dynamically. For that case, you can use one of:
 
 ### loadOptionsMethod
 
@@ -148,8 +147,7 @@ methods = {
 
 ### resourceMapper
 
-Use when the **schema is dynamic**, e.g. Google Sheets, where columns
-can change:
+Use when the **schema is dynamic**, e.g. Google Sheets, where columns can change:
 
 ```typescript
 {

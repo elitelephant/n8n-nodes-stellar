@@ -52,5 +52,9 @@ module.exports = {
 	/**
 	 * https://prettier.io/docs/en/configuration.html#configuration-overrides
 	 */
-	overrides: [{ files: 'package.json', options: { useTabs: false } }],
+	overrides: [
+		{ files: 'package.json', options: { useTabs: false } },
+		// https://prettier.io/docs/en/options.html#prose-wrap
+		{ files: '*.md', options: { proseWrap: 'always' } },
+	],
 };

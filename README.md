@@ -1,10 +1,13 @@
 # n8n-nodes-stellar
 
-This is an n8n community node. It lets you sign Stellar transactions in your n8n workflows, with a secret key stored in an n8n credential.
+This is an n8n community node. It lets you sign Stellar transactions in your n8n workflows, with a
+secret key stored in an n8n credential.
 
-[Stellar](https://stellar.org/) is a public blockchain network for payments and asset issuance. Its native currency is the lumen (XLM).
+[Stellar](https://stellar.org/) is a public blockchain network for payments and asset issuance. Its
+native currency is the lumen (XLM).
 
-[n8n](https://n8n.io/) is a [fair-code licensed](https://docs.n8n.io/n8n-community-license) workflow automation platform.
+[n8n](https://n8n.io/) is a [fair-code licensed](https://docs.n8n.io/n8n-community-license) workflow
+automation platform.
 
 [Installation](#installation)  
 [Operations](#operations)  
@@ -15,18 +18,21 @@ This is an n8n community node. It lets you sign Stellar transactions in your n8n
 
 ## Installation
 
-Follow the [installation guide](https://docs.n8n.io/integrations/community-nodes/installation/) in the n8n community nodes documentation.
+Follow the [installation guide](https://docs.n8n.io/integrations/community-nodes/installation/) in
+the n8n community nodes documentation.
 
 ## Operations
 
-The package has one node, **Stellar Signer**. It signs a Stellar transaction and returns it signed. It doesn't submit the transaction to the network.
+The package has one node, **Stellar Signer**. It signs a Stellar transaction and returns it signed.
+It doesn't submit the transaction to the network.
 
 Parameters:
 
 - **Transaction XDR** (`xdr`): the unsigned transaction, as base64 XDR.
 - **Network** (`network`): Mainnet or Testnet. The transaction is signed for this network.
 
-> **Mainnet is the default network.** On Mainnet, a signed transaction moves real funds once it is submitted. Check the **Network** parameter before you run a workflow. Try it on Testnet first.
+> **Mainnet is the default network.** On Mainnet, a signed transaction moves real funds once it is
+> submitted. Check the **Network** parameter before you run a workflow. Try it on Testnet first.
 
 Each output item keeps the fields of its input item and adds:
 
@@ -40,9 +46,12 @@ Each output item keeps the fields of its input item and adds:
 
 ## Credentials
 
-The node uses the **Stellar Wallet API** credential (`stellarWalletApi`), which has one field, **Secret Key** (`secretKey`). See [CREDENTIALS.md](CREDENTIALS.md) for what the secret key is, how to get one on Testnet and how to keep it safe.
+The node uses the **Stellar Wallet API** credential (`stellarWalletApi`), which has one field,
+**Secret Key** (`secretKey`). See [CREDENTIALS.md](CREDENTIALS.md) for what the secret key is, how
+to get one on Testnet and how to keep it safe.
 
-The secret key lives only in the credential. The node never returns it in its output or in its error messages.
+The secret key lives only in the credential. The node never returns it in its output or in its error
+messages.
 
 ## Compatibility
 
@@ -51,13 +60,17 @@ The secret key lives only in the credential. The node never returns it in its ou
 
 ## Usage
 
-The Stellar Signer sits between a node that builds a transaction and a node that uses the signed result:
+The Stellar Signer sits between a node that builds a transaction and a node that uses the signed
+result:
 
 1. A previous node produces the unsigned transaction XDR.
-2. In the Stellar Signer, set **Transaction XDR** with an expression that reads that XDR from the previous node's output.
+2. In the Stellar Signer, set **Transaction XDR** with an expression that reads that XDR from the
+   previous node's output.
 3. The next node reads the signed transaction with `{{ $json.signedXdr }}`.
 
-Sign each transaction only once with the same key. If the same XDR goes through the Stellar Signer twice with the same key, it carries a repeated signature, and the network rejects it with `tx_bad_auth_extra`.
+Sign each transaction only once with the same key. If the same XDR goes through the Stellar Signer
+twice with the same key, it carries a repeated signature, and the network rejects it with
+`tx_bad_auth_extra`.
 
 ## Resources
 

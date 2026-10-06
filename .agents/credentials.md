@@ -1,7 +1,7 @@
 # Credentials
 
-Credentials are used to authenticate with external services and store
-sensitive values. They are encrypted at rest.
+Credentials are used to authenticate with external services and store sensitive values. They are
+encrypted at rest.
 
 ## Credential class anatomy
 
@@ -70,18 +70,15 @@ export class WordpressApi implements ICredentialType {
 
 ## Notes
 
-- `test` describes how to check if credentials are valid to show a
-  message to the user in the UI
+- `test` describes how to check if credentials are valid to show a message to the user in the UI
   - Not strictly required, but strongly recommended.
-  - The `stellarWalletApi` credential has no `test` request: there is no
-    API to call. It is tested from the Stellar Signer node instead, with
-    `testedBy: 'stellarWalletApiTest'` in the node's `credentials` and a
-    `methods.credentialTest` function that validates the secret key
-    without using the network. On success n8n shows its own fixed text,
-    so the test's message never reaches the user; the account's public
-    key is in the node's `publicKey` output (see `CREDENTIALS.md`)
-- `authenticate` describes how to modify requests for declarative-style
-  nodes and the HTTP Request node.
+  - The `stellarWalletApi` credential has no `test` request: there is no API to call. It is tested
+    from the Stellar Signer node instead, with `testedBy: 'stellarWalletApiTest'` in the node's
+    `credentials` and a `methods.credentialTest` function that validates the secret key without
+    using the network. On success n8n shows its own fixed text, so the test's message never reaches
+    the user; the account's public key is in the node's `publicKey` output (see `CREDENTIALS.md`)
+- `authenticate` describes how to modify requests for declarative-style nodes and the HTTP Request
+  node.
 
 ## Custom authenticate function
 
@@ -130,8 +127,7 @@ export class MyServiceOAuth2Api implements ICredentialType {
 ```
 
 - The base `oAuth2Api` handles the generic OAuth2 flow.
-- When allowing users to specify scopes in a custom OAuth2 credential,
-  make sure to follow n8n's internal rules (see n8n docs).
-- If you want to define scopes that the credentials will request, add a
-  property with `name: 'scope'`, `type: 'hidden'` and `default` field
-  that has your desired scopes
+- When allowing users to specify scopes in a custom OAuth2 credential, make sure to follow n8n's
+  internal rules (see n8n docs).
+- If you want to define scopes that the credentials will request, add a property with
+  `name: 'scope'`, `type: 'hidden'` and `default` field that has your desired scopes
