@@ -28,6 +28,8 @@ export class StellarSigner implements INodeType {
 		},
 		inputs: [NodeConnectionTypes.Main],
 		outputs: [NodeConnectionTypes.Main],
+		// n8n-workflow 2.x types this as true or an object; n8n treats false like a missing property.
+		usableAsTool: false as unknown as true,
 		credentials: [
 			{
 				name: 'stellarWalletApi',
