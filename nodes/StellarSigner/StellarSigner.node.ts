@@ -61,7 +61,7 @@ export class StellarSigner implements INodeType {
 						value: 'testnet',
 					},
 				],
-				default: 'public',
+				default: 'testnet',
 				description: 'The Stellar network to use',
 			},
 		],
@@ -108,7 +108,7 @@ export class StellarSigner implements INodeType {
 			try {
 				const transactionXdr = this.getNodeParameter('xdr', itemIndex, '');
 				// The SDK's network names (Networks.PUBLIC, Networks.TESTNET), in lowercase.
-				const networkName = this.getNodeParameter('network', itemIndex, 'public');
+				const networkName = this.getNodeParameter('network', itemIndex, 'testnet');
 				const networkPassphrase = passphraseFor(this.getNode(), networkName, itemIndex);
 
 				// An empty XDR fails before the secret key is read. The SDK rejects it too, so

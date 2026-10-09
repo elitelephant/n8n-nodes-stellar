@@ -32,9 +32,9 @@ Parameters:
 - **Network** (`network`): Public (`public`) or Testnet (`testnet`). The transaction is signed for
   this network.
 
-> **`public` is the default network.** On the public network, a signed transaction moves real funds
-> once it is submitted. Check the **Network** parameter before you run a workflow. Try it on
-> `testnet` first.
+> **`testnet` is the default network.** To sign for the real network, choose **Public** in the
+> **Network** parameter. On the public network, a signed transaction moves real funds once it is
+> submitted. Check the **Network** parameter before you run a workflow.
 
 Each output item keeps the fields of its input item and adds:
 

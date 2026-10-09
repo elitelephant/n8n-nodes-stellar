@@ -94,8 +94,8 @@ actual node.
 - Don't break this contract, which existing workflows depend on:
   - the node type and version above
   - the credential name and its `secretKey` field
-  - the parameters `xdr` and `network`, with `public` as the default, which n8n does not save in the
-    workflow
+  - the parameters `xdr` and `network`, with `testnet` as the default, which n8n does not save in
+    the workflow
   - the output fields `signedXdr`, `txHash`, `publicKey`, `network` and `networkName` (`public` or
     `testnet`)
 - The Stellar SDK is `@stellar/stellar-sdk`, pinned to `17.1.0` as a runtime dependency. The

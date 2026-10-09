@@ -37,7 +37,8 @@ the account again or create a new one.
 - Use a separate account for each workflow or purpose, with only the funds it needs.
 - Try your workflow on `testnet` first. On `public`, a signed transaction moves real funds once it
   is submitted to the network.
-- `public` is the node's default network. Check the **Network** parameter before you run a workflow.
+- `testnet` is the node's default network. To sign for the real network, choose **Public** in the
+  **Network** parameter. Check it before you run a workflow.
 
 More about accounts and keys:
 [Create an account](https://developers.stellar.org/docs/build/guides/transactions/create-account) in
