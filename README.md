@@ -34,6 +34,9 @@ Parameters:
 - **Submit to Horizon** (`submit`): off by default. When it is on, the node submits the transaction
   it signed to the network through [Horizon](https://developers.stellar.org/docs/data/apis/horizon)
   and waits for the result. It submits once and doesn't retry.
+- **Horizon URL** (`horizonUrl`): shown when **Submit to Horizon** is on, and empty by default. Set
+  it to submit to another Horizon server, such as your own or a provider's. It must be an `https`
+  address. It accepts an expression, so several nodes can share one address from a variable.
 
 > **`testnet` is the default network.** To sign for the real network, choose **Public** in the
 > **Network** parameter. On the public network, a signed transaction moves real funds once it is
@@ -62,7 +65,8 @@ Each output item keeps the fields of its input item and adds:
 
 With **Submit to Horizon** on, the node sends the transaction to SDF's Horizon server for the chosen
 network: `https://horizon-testnet.stellar.org` for `testnet` and `https://horizon.stellar.org` for
-`public`. Each output item also has:
+`public`. Stellar's documentation no longer lists the `public` one: if it stops answering, enter
+your provider's address in **Horizon URL**. Each output item also has:
 
 | Field       | Description                                             |
 | ----------- | ------------------------------------------------------- |

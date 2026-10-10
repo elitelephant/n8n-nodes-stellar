@@ -92,7 +92,8 @@ export class StellarSigner implements INodeType {
 						submit: [true],
 					},
 				},
-				description: 'The Horizon server to submit to. Leave empty to use the one for the network.',
+				description:
+					"The Horizon server to submit to. Leave empty to use SDF's server for the network: horizon-testnet.stellar.org for testnet and horizon.stellar.org for public. Stellar's documentation no longer lists the public one, so enter your provider's address if it stops answering.",
 			},
 		],
 	};
@@ -154,8 +155,12 @@ export class StellarSigner implements INodeType {
 				// n8n doesn't hand over a parameter that is hidden.
 				let horizon: Horizon.Server | undefined;
 				if (this.getNodeParameter('submit', itemIndex, false) === true) {
-					const horizonUrl = this.getNodeParameter('horizonUrl', itemIndex, '');
-					horizon = new Horizon.Server(horizonUrlFor(networkName, String(horizonUrl ?? '')));
+					horizon = horizonServerFor(
+						this.getNode(),
+						networkName,
+						this.getNodeParameter('horizonUrl', itemIndex, ''),
+						itemIndex,
+					);
 				}
 
 				// An empty XDR fails before the secret key is read. The SDK rejects it too, so
@@ -228,6 +233,44 @@ function networkNameFrom(node: INode, value: unknown, itemIndex: number): Networ
 		itemIndex,
 		description: 'Choose public or testnet in the Network parameter.',
 	});
+}
+
+const ENTER_HORIZON_URL =
+	"Enter the address of a Horizon server, for example https://horizon-testnet.stellar.org, or leave the field empty to use SDF's server for the network.";
+
+// The Horizon client for the item's submission. A Horizon URL that can't be used fails the item
+// here. A value without text, such as an expression that gives nothing, counts as empty.
+function horizonServerFor(
+	node: INode,
+	networkName: NetworkName,
+	horizonUrl: unknown,
+	itemIndex: number,
+): Horizon.Server {
+	const url = horizonUrlFor(networkName, String(horizonUrl ?? ''));
+	let protocol: string;
+	try {
+		protocol = new URL(url).protocol;
+	} catch (error) {
+		throw new NodeOperationError(node, error, {
+			itemIndex,
+			message: "'Horizon URL' isn't a valid URL",
+			description: ENTER_HORIZON_URL,
+		});
+	}
+	try {
+		return new Horizon.Server(url);
+	} catch (error) {
+		// The SDK only connects over https.
+		if (protocol !== 'https:') {
+			throw new NodeOperationError(node, error, {
+				itemIndex,
+				message: "'Horizon URL' must start with https://",
+				description:
+					"This node only submits to a Horizon server over https. Enter an https address, or leave the field empty to use SDF's server for the network.",
+			});
+		}
+		throw new NodeOperationError(node, error, { itemIndex });
+	}
 }
 
 // The network isn't stored in the transaction XDR, so the item has to say which network its
