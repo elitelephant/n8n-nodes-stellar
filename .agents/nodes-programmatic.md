@@ -71,7 +71,8 @@ async execute(
   operational/validation errors)
 - Support `continueOnFail()` to allow workflows to proceed when possible. The failed item keeps its
   input's data, plus its error and its `pairedItem`, as the Stellar Signer does
-- The Stellar Signer doesn't call the network. When a node needs the Stellar network, use the SDK's
-  Horizon client instead of `this.helpers.httpRequest`
+- The Stellar Signer calls the network only when **Submit to Horizon** is on, through the SDK's
+  Horizon client. When a node needs the Stellar network, use that client instead of
+  `this.helpers.httpRequest`
 - Programmatic-style nodes support both **light and full versioning**. See `.agents/versioning.md`
   for details.

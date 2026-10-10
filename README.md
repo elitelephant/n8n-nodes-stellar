@@ -1,7 +1,7 @@
 # n8n-nodes-stellar
 
 This is an n8n community node. It lets you sign Stellar transactions in your n8n workflows, with a
-secret key stored in an n8n credential.
+secret key stored in an n8n credential, and submit them to the network.
 
 [Stellar](https://stellar.org/) is a public blockchain network for payments and asset issuance. Its
 native currency is the lumen (XLM).
@@ -24,17 +24,21 @@ the n8n community nodes documentation.
 ## Operations
 
 The package has one node, **Stellar Signer**. It signs a Stellar transaction and returns it signed.
-It doesn't submit the transaction to the network.
+It can also submit the signed transaction to the network, which is off by default.
 
 Parameters:
 
 - **Transaction XDR** (`xdr`): the unsigned transaction, as base64 XDR.
 - **Network** (`network`): Public (`public`) or Testnet (`testnet`). The transaction is signed for
   this network.
+- **Submit to Horizon** (`submit`): off by default. When it is on, the node submits the transaction
+  it signed to the network through [Horizon](https://developers.stellar.org/docs/data/apis/horizon)
+  and waits for the result. It submits once and doesn't retry.
 
 > **`testnet` is the default network.** To sign for the real network, choose **Public** in the
 > **Network** parameter. On the public network, a signed transaction moves real funds once it is
-> submitted. Check the **Network** parameter before you run a workflow.
+> submitted, and with **Submit to Horizon** on the node submits it itself. Check the **Network**
+> parameter before you run a workflow.
 
 Each input item must have a `networkName` field with `public` or `testnet`, the network the
 transaction was built for. The Stellar Signer signs only when that value is the same as the
@@ -55,6 +59,17 @@ Each output item keeps the fields of its input item and adds:
 | `publicKey`   | The public key of the account that signed, which matches the credential's secret key. |
 | `network`     | The full network passphrase.                                                          |
 | `networkName` | `public` or `testnet`.                                                                |
+
+With **Submit to Horizon** on, the node sends the transaction to SDF's Horizon server for the chosen
+network: `https://horizon-testnet.stellar.org` for `testnet` and `https://horizon.stellar.org` for
+`public`. Each output item also has:
+
+| Field       | Description                                             |
+| ----------- | ------------------------------------------------------- |
+| `submitted` | `true`: Horizon confirmed the transaction.              |
+| `ledger`    | The number of the ledger that included the transaction. |
+
+If Horizon doesn't confirm the transaction, the item fails.
 
 ## Credentials
 
@@ -79,7 +94,8 @@ result:
    with the network the transaction was built for.
 2. In the Stellar Signer, set **Transaction XDR** with an expression that reads that XDR from the
    previous node's output, and choose the same network in **Network**.
-3. The next node reads the signed transaction with `{{ $json.signedXdr }}`.
+3. The next node reads the signed transaction with `{{ $json.signedXdr }}`. To send it to the
+   network from this node instead, turn on **Submit to Horizon** and read `{{ $json.ledger }}`.
 
 Sign each transaction only once with the same key. If the same XDR goes through the Stellar Signer
 twice with the same key, it carries a repeated signature, and the network rejects it with

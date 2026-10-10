@@ -36,7 +36,8 @@ the account again or create a new one.
   or workflow notes, which are saved as part of the workflow.
 - Use a separate account for each workflow or purpose, with only the funds it needs.
 - Try your workflow on `testnet` first. On `public`, a signed transaction moves real funds once it
-  is submitted to the network.
+  is submitted to the network. With **Submit to Horizon** on, the node submits it right after it
+  signs it.
 - `testnet` is the node's default network. To sign for the real network, choose **Public** in the
   **Network** parameter. Check it before you run a workflow.
 

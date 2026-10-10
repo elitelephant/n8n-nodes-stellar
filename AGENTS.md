@@ -101,8 +101,15 @@ actual node.
     different
   - the output fields `signedXdr`, `txHash`, `publicKey`, `network` and `networkName` (`public` or
     `testnet`)
+  - the optional parameters `submit`, off by default, and `horizonUrl`, which n8n shows only when
+    `submit` is on: with `submit` off, the node doesn't call the network and its output is the five
+    fields above
+  - the output fields `submitted` (`true`) and `ledger`, which the node adds when `submit` is on and
+    Horizon confirms the transaction
 - The Stellar SDK is `@stellar/stellar-sdk`, pinned to `17.1.0` as a runtime dependency. The
   transaction hash is hex: `Buffer.from(transaction.hash()).toString('hex')`.
+- The network names, their passphrases and SDF's Horizon server for each one are in
+  `nodes/shared/network.ts`. Use it from any node that needs them.
 - The secret key lives only in the Stellar Signer's credential. It never appears in the output, in
   error messages or in logs.
 - The package is not eligible for n8n Cloud: it has a runtime dependency and its own ESLint config.
