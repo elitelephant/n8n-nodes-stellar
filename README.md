@@ -36,6 +36,16 @@ Parameters:
 > **Network** parameter. On the public network, a signed transaction moves real funds once it is
 > submitted. Check the **Network** parameter before you run a workflow.
 
+Each input item must have a `networkName` field with `public` or `testnet`, the network the
+transaction was built for. The Stellar Signer signs only when that value is the same as the
+**Network** parameter. If the field is missing, has another value or names the other network, that
+item fails and isn't signed.
+
+The network isn't stored in the transaction XDR, so this field is how the node knows which network
+the transaction was built for. If the XDR comes from a node that doesn't set it, add the field with
+an **Edit Fields** node before the Stellar Signer, with **Include Other Input Fields** turned on so
+the item keeps the XDR.
+
 Each output item keeps the fields of its input item and adds:
 
 | Field         | Description                                                                           |
@@ -65,9 +75,10 @@ messages.
 The Stellar Signer sits between a node that builds a transaction and a node that uses the signed
 result:
 
-1. A previous node produces the unsigned transaction XDR.
+1. A previous node produces the unsigned transaction XDR, in an item that has a `networkName` field
+   with the network the transaction was built for.
 2. In the Stellar Signer, set **Transaction XDR** with an expression that reads that XDR from the
-   previous node's output.
+   previous node's output, and choose the same network in **Network**.
 3. The next node reads the signed transaction with `{{ $json.signedXdr }}`.
 
 Sign each transaction only once with the same key. If the same XDR goes through the Stellar Signer

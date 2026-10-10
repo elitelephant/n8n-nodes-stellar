@@ -96,6 +96,9 @@ actual node.
   - the credential name and its `secretKey` field
   - the parameters `xdr` and `network`, with `testnet` as the default, which n8n does not save in
     the workflow
+  - the `networkName` field of each input item (`public` or `testnet`), which must be the same as
+    the `network` parameter: the node fails the item without signing it when the field is missing or
+    different
   - the output fields `signedXdr`, `txHash`, `publicKey`, `network` and `networkName` (`public` or
     `testnet`)
 - The Stellar SDK is `@stellar/stellar-sdk`, pinned to `17.1.0` as a runtime dependency. The

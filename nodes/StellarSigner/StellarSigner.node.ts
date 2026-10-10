@@ -62,7 +62,8 @@ export class StellarSigner implements INodeType {
 					},
 				],
 				default: 'testnet',
-				description: 'The Stellar network to use',
+				description:
+					"The Stellar network to sign for. Each input item must have the same value in its 'networkName' field.",
 			},
 		],
 	};
@@ -106,10 +107,15 @@ export class StellarSigner implements INodeType {
 
 		for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
 			try {
+				const item = items[itemIndex];
 				const transactionXdr = this.getNodeParameter('xdr', itemIndex, '');
 				// The SDK's network names (Networks.PUBLIC, Networks.TESTNET), in lowercase.
 				const networkName = this.getNodeParameter('network', itemIndex, 'testnet');
 				const networkPassphrase = passphraseFor(this.getNode(), networkName, itemIndex);
+				// Checked after the Network parameter and before the XDR and the item's secret key
+				// check. An empty secret key still fails the run before the items. n8n doesn't check
+				// that an item has json, so it is read with ?. here.
+				checkItemNetwork(this.getNode(), item.json?.networkName, networkName, itemIndex);
 
 				// An empty XDR fails before the secret key is read. The SDK rejects it too, so
 				// parseTransaction throws here.
@@ -129,7 +135,6 @@ export class StellarSigner implements INodeType {
 				const txHash = Buffer.from(transaction.hash()).toString('hex');
 				const signedXdr = transaction.toXdr();
 
-				const item = items[itemIndex];
 				const newItem: INodeExecutionData = {
 					json: {
 						...item.json,
@@ -178,6 +183,42 @@ function passphraseFor(node: INode, networkName: unknown, itemIndex: number): st
 		itemIndex,
 		description: 'Choose public or testnet in the Network parameter.',
 	});
+}
+
+// The network isn't stored in the transaction XDR, so the item has to say which network its
+// transaction was built for, in networkName. A signature for the wrong network looks valid, and
+// the network only rejects it on submission.
+function checkItemNetwork(
+	node: INode,
+	itemNetworkName: unknown,
+	nodeNetworkName: unknown,
+	itemIndex: number,
+): void {
+	if (itemNetworkName === undefined || itemNetworkName === null || isBlank(itemNetworkName)) {
+		throw new NodeOperationError(node, "'networkName' is missing from the input item", {
+			itemIndex,
+			description:
+				"Add a 'networkName' field with public or testnet, the network the transaction was built for. An Edit Fields node before this one can add it, with 'Include Other Input Fields' turned on so the item keeps its other fields.",
+		});
+	}
+	if (itemNetworkName !== 'public' && itemNetworkName !== 'testnet') {
+		throw new NodeOperationError(node, "'networkName' must be public or testnet", {
+			itemIndex,
+			description:
+				"Set 'networkName' in the input item to public or testnet, in lowercase and without spaces. It is the network the transaction was built for.",
+		});
+	}
+	if (itemNetworkName !== nodeNetworkName) {
+		// The node only knows what the item says: the label may be wrong, not the transaction.
+		throw new NodeOperationError(
+			node,
+			`'networkName' is ${itemNetworkName} but 'Network' is ${nodeNetworkName}`,
+			{
+				itemIndex,
+				description: `The input item says the transaction was built for ${itemNetworkName}, and this node signs for ${nodeNetworkName}. Choose ${itemNetworkName} in the 'Network' parameter, build the transaction for ${nodeNetworkName}, or fix 'networkName' in the input item if it is wrong.`,
+			},
+		);
+	}
 }
 
 // The item index is left out for an empty secret key, which is checked before the items.
