@@ -9,7 +9,14 @@ import type {
 	INodeTypeDescription,
 } from 'n8n-workflow';
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
-import { Keypair, Networks, Transaction, xdr } from '@stellar/stellar-sdk';
+import { Horizon, Keypair, Transaction, xdr } from '@stellar/stellar-sdk';
+
+import {
+	horizonUrlFor,
+	isNetworkName,
+	NETWORK_PASSPHRASES,
+	type NetworkName,
+} from '../shared/network';
 
 const ENTER_SECRET_KEY = "Enter the account's secret key: 56 characters, starting with S.";
 const ENTER_TRANSACTION_XDR = 'Enter the base64 XDR of the transaction to sign.';
@@ -65,6 +72,28 @@ export class StellarSigner implements INodeType {
 				description:
 					"The Stellar network to sign for. Each input item must have the same value in its 'networkName' field.",
 			},
+			{
+				displayName: 'Submit to Horizon',
+				name: 'submit',
+				type: 'boolean',
+				default: false,
+				validateType: 'boolean',
+				description:
+					"Whether to submit the signed transaction to the network through Horizon, using SDF's server for the chosen network unless 'Horizon URL' has another. On the public network, this moves real funds.",
+			},
+			{
+				displayName: 'Horizon URL',
+				name: 'horizonUrl',
+				type: 'string',
+				default: '',
+				placeholder: 'e.g. https://horizon-testnet.stellar.org',
+				displayOptions: {
+					show: {
+						submit: [true],
+					},
+				},
+				description: 'The Horizon server to submit to. Leave empty to use the one for the network.',
+			},
 		],
 	};
 
@@ -109,13 +138,25 @@ export class StellarSigner implements INodeType {
 			try {
 				const item = items[itemIndex];
 				const transactionXdr = this.getNodeParameter('xdr', itemIndex, '');
-				// The SDK's network names (Networks.PUBLIC, Networks.TESTNET), in lowercase.
-				const networkName = this.getNodeParameter('network', itemIndex, 'testnet');
-				const networkPassphrase = passphraseFor(this.getNode(), networkName, itemIndex);
+				const networkName = networkNameFrom(
+					this.getNode(),
+					this.getNodeParameter('network', itemIndex, 'testnet'),
+					itemIndex,
+				);
+				const networkPassphrase = NETWORK_PASSPHRASES[networkName];
 				// Checked after the Network parameter and before the XDR and the item's secret key
 				// check. An empty secret key still fails the run before the items. n8n doesn't check
 				// that an item has json, so it is read with ?. here.
 				checkItemNetwork(this.getNode(), item.json?.networkName, networkName, itemIndex);
+
+				// With Submit to Horizon on, the server is set up before the transaction is read or
+				// signed, so a wrong setting fails the item unsigned. horizonUrl is only read then:
+				// n8n doesn't hand over a parameter that is hidden.
+				let horizon: Horizon.Server | undefined;
+				if (this.getNodeParameter('submit', itemIndex, false) === true) {
+					const horizonUrl = this.getNodeParameter('horizonUrl', itemIndex, '');
+					horizon = new Horizon.Server(horizonUrlFor(networkName, String(horizonUrl ?? '')));
+				}
 
 				// An empty XDR fails before the secret key is read. The SDK rejects it too, so
 				// parseTransaction throws here.
@@ -150,6 +191,13 @@ export class StellarSigner implements INodeType {
 					newItem.binary = item.binary;
 				}
 
+				// No retries: a transaction that Horizon doesn't confirm fails the item.
+				if (horizon !== undefined) {
+					const response = await horizon.submitTransaction(transaction);
+					newItem.json.submitted = true;
+					newItem.json.ledger = response.ledger;
+				}
+
 				returnData.push(newItem);
 			} catch (error) {
 				// A NodeOperationError passes through unchanged and keeps its own itemIndex.
@@ -172,12 +220,9 @@ export class StellarSigner implements INodeType {
 
 // Any other value, such as the 0.1.1 value mainnet, fails instead of signing for a network the user
 // didn't choose.
-function passphraseFor(node: INode, networkName: unknown, itemIndex: number): string {
-	if (networkName === 'public') {
-		return Networks.PUBLIC;
-	}
-	if (networkName === 'testnet') {
-		return Networks.TESTNET;
+function networkNameFrom(node: INode, value: unknown, itemIndex: number): NetworkName {
+	if (isNetworkName(value)) {
+		return value;
 	}
 	throw new NodeOperationError(node, "'Network' must be public or testnet", {
 		itemIndex,
@@ -191,7 +236,7 @@ function passphraseFor(node: INode, networkName: unknown, itemIndex: number): st
 function checkItemNetwork(
 	node: INode,
 	itemNetworkName: unknown,
-	nodeNetworkName: unknown,
+	nodeNetworkName: NetworkName,
 	itemIndex: number,
 ): void {
 	if (itemNetworkName === undefined || itemNetworkName === null || isBlank(itemNetworkName)) {
@@ -201,7 +246,7 @@ function checkItemNetwork(
 				"Add a 'networkName' field with public or testnet, the network the transaction was built for. An Edit Fields node before this one can add it, with 'Include Other Input Fields' turned on so the item keeps its other fields.",
 		});
 	}
-	if (itemNetworkName !== 'public' && itemNetworkName !== 'testnet') {
+	if (!isNetworkName(itemNetworkName)) {
 		throw new NodeOperationError(node, "'networkName' must be public or testnet", {
 			itemIndex,
 			description:
