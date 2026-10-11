@@ -34,9 +34,10 @@ the account again or create a new one.
 ## Limit what the node signs
 
 The credential can limit what the Stellar Signer signs with this secret key. Each limit on
-transactions is optional and empty by default, which means no limit. The node checks a transaction
-against the limits before it signs it. An item whose transaction breaks a limit fails and isn't
-signed. These limits don't apply to messages, which have their own switch.
+transactions is optional. An empty limit, or a **Maximum Fee** of 0, means no limit, and that is how
+they start. The node checks a transaction against the limits before it signs it. An item whose
+transaction breaks a limit fails and isn't signed. These limits don't apply to messages, which have
+their own switch.
 
 - **Allowed Operations**: the operation types the node may sign, one per line. With only `payment`
   here, a transaction that has an `accountMerge` or a `setOptions` operation fails. The node checks
@@ -71,6 +72,10 @@ signed. These limits don't apply to messages, which have their own switch.
   account plus a customer number. A `G` line allows that account and every muxed address of it. An
   `M` line allows only that muxed address. The node checks the destination of the four payment
   operations.
+
+- **Maximum Fee**: the highest fee, in stroops, that a transaction may carry. One XLM is 10,000,000
+  stroops. It is the transaction's total fee, for all its operations: the most the account agrees to
+  pay, which can be more than what the network ends up charging. `0`, the default, means no limit.
 
 - **Allow Message Signing**: whether the node may sign messages with this key, with its **Sign
   Message** operation. It is off by default, and Sign Message fails while it is off. Leave it off
