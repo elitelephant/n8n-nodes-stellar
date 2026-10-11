@@ -12,7 +12,7 @@ import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import { type Horizon, Keypair, Transaction, xdr } from '@stellar/stellar-sdk';
 
 import { isNetworkName, NETWORK_PASSPHRASES, type NetworkName } from '../shared/network';
-import { checkMemoRequired, horizonServerFor } from './submission';
+import { checkMemoRequired, horizonServerFor, submitTransaction } from './submission';
 
 const ENTER_SECRET_KEY = "Enter the account's secret key: 56 characters, starting with S.";
 const ENTER_TRANSACTION_XDR = 'Enter the base64 XDR of the transaction to sign.';
@@ -196,13 +196,20 @@ export class StellarSigner implements INodeType {
 					newItem.binary = item.binary;
 				}
 
-				// No retries: a transaction that Horizon doesn't confirm fails the item.
+				// No retries: a transaction that Horizon doesn't confirm fails the item, and the error
+				// says whether it was rejected, not submitted, or may still be applied.
 				if (horizon !== undefined) {
-					const response = await horizon.submitTransaction(transaction, {
-						skipMemoRequiredCheck: true,
-					});
+					const result = await submitTransaction(horizon, transaction, txHash);
+					if ('failure' in result) {
+						const { failure } = result;
+						throw new NodeOperationError(
+							this.getNode(),
+							failure.cause instanceof Error ? failure.cause : failure.message,
+							{ itemIndex, message: failure.message, description: failure.description },
+						);
+					}
 					newItem.json.submitted = true;
-					newItem.json.ledger = response.ledger;
+					newItem.json.ledger = result.ledger;
 				}
 
 				returnData.push(newItem);
