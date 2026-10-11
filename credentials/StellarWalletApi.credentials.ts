@@ -35,5 +35,13 @@ export class StellarWalletApi implements ICredentialType {
 			description:
 				"The operation types this wallet may sign, one per line, such as payment or createAccount. Leave empty to sign any operation. A transaction with any other operation fails and isn't signed.",
 		},
+		{
+			displayName: 'Allow Message Signing',
+			name: 'allowMessageSigning',
+			type: 'boolean',
+			default: false,
+			description:
+				'Whether the Stellar Signer may sign messages (SEP-53) with this wallet. Leave it off unless a workflow needs it: a signed message can prove control of the account to another service.',
+		},
 	];
 }

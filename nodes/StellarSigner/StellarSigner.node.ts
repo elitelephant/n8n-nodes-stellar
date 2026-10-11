@@ -12,7 +12,7 @@ import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import { type Horizon, Keypair, Transaction, xdr } from '@stellar/stellar-sdk';
 
 import { isNetworkName, NETWORK_PASSPHRASES, type NetworkName } from '../shared/network';
-import { checkPolicy, readPolicy } from './policy';
+import { checkMessageSigning, checkPolicy, type Policy, readPolicy } from './policy';
 import {
 	addAppliedTransactions,
 	type AppliedTransaction,
@@ -25,6 +25,7 @@ import {
 
 const ENTER_SECRET_KEY = "Enter the account's secret key: 56 characters, starting with S.";
 const ENTER_TRANSACTION_XDR = 'Enter the base64 XDR of the transaction to sign.';
+const ENTER_MESSAGE = 'Enter the text to sign.';
 
 export class StellarSigner implements INodeType {
 	description: INodeTypeDescription = {
@@ -33,8 +34,9 @@ export class StellarSigner implements INodeType {
 		icon: { light: 'file:stellarLogo.svg', dark: 'file:stellarLogo.dark.svg' },
 		group: ['transform'],
 		version: 1,
-		// The same value as the networkName output field.
-		subtitle: '={{ $parameter["network"] }}',
+		// For a transaction, the same value as the networkName output field.
+		subtitle:
+			'={{ $parameter["operation"] === "signMessage" ? "sign message" : $parameter["network"] }}',
 		description: 'Sign Stellar transactions using a wallet secret key',
 		defaults: {
 			name: 'Stellar Signer',
@@ -52,11 +54,37 @@ export class StellarSigner implements INodeType {
 		],
 		properties: [
 			{
+				displayName: 'Operation',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true,
+				options: [
+					{
+						name: 'Sign Message',
+						value: 'signMessage',
+						description: "Sign a text with the wallet's key, following SEP-53",
+						action: 'Sign a message',
+					},
+					{
+						name: 'Sign Transaction',
+						value: 'signTransaction',
+						description: 'Sign a transaction and optionally submit it to the network',
+						action: 'Sign a transaction',
+					},
+				],
+				default: 'signTransaction',
+			},
+			{
 				displayName: 'Transaction XDR',
 				name: 'xdr',
 				type: 'string',
 				default: '',
 				placeholder: 'AAAAAgAAAAC...',
+				displayOptions: {
+					show: {
+						operation: ['signTransaction'],
+					},
+				},
 				description: 'The unsigned transaction XDR to sign',
 			},
 			{
@@ -74,6 +102,11 @@ export class StellarSigner implements INodeType {
 					},
 				],
 				default: 'testnet',
+				displayOptions: {
+					show: {
+						operation: ['signTransaction'],
+					},
+				},
 				description:
 					"The Stellar network to sign for. Each input item must have the same value in its 'networkName' field.",
 			},
@@ -83,6 +116,11 @@ export class StellarSigner implements INodeType {
 				type: 'boolean',
 				default: false,
 				validateType: 'boolean',
+				displayOptions: {
+					show: {
+						operation: ['signTransaction'],
+					},
+				},
 				description:
 					"Whether to submit the signed transaction to the network through Horizon, using SDF's server for the chosen network unless 'Horizon URL' has another. On the public network, this moves real funds.",
 			},
@@ -94,11 +132,28 @@ export class StellarSigner implements INodeType {
 				placeholder: 'e.g. https://horizon.example.com',
 				displayOptions: {
 					show: {
+						operation: ['signTransaction'],
 						submit: [true],
 					},
 				},
 				description:
 					"The Horizon server to submit to, as an https address. Plain http works only for localhost. Leave empty to use SDF's server for the network: horizon-testnet.stellar.org for testnet and horizon.stellar.org for public. Stellar's documentation no longer lists the public server, so enter your provider's address if it stops answering.",
+			},
+			{
+				displayName: 'Message',
+				name: 'message',
+				type: 'string',
+				typeOptions: {
+					rows: 4,
+				},
+				default: '',
+				displayOptions: {
+					show: {
+						operation: ['signMessage'],
+					},
+				},
+				description:
+					"The text to sign, as it is. The signature follows SEP-53 and proves that this wallet's key signed this exact text.",
 			},
 		],
 	};
@@ -167,6 +222,31 @@ export class StellarSigner implements INodeType {
 		for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
 			try {
 				const item = items[itemIndex];
+				const operation = this.getNodeParameter('operation', itemIndex, 'signTransaction');
+				if (operation === 'signMessage') {
+					returnData.push(
+						signMessage(
+							this.getNode(),
+							item,
+							this.getNodeParameter('message', itemIndex, ''),
+							secretKey,
+							policy,
+							itemIndex,
+						),
+					);
+					continue;
+				}
+				if (operation !== 'signTransaction') {
+					throw new NodeOperationError(
+						this.getNode(),
+						"'Operation' must be signTransaction or signMessage",
+						{
+							itemIndex,
+							description: 'Choose Sign Transaction or Sign Message in the Operation parameter.',
+						},
+					);
+				}
+
 				const transactionXdr = this.getNodeParameter('xdr', itemIndex, '');
 				const networkName = networkNameFrom(
 					this.getNode(),
@@ -308,6 +388,51 @@ export class StellarSigner implements INodeType {
 
 		return [returnData];
 	}
+}
+
+// Signs a text with the wallet's key, as SEP-53 says, and returns the item with the text, its
+// signature and the public key. It needs no network, so the item's networkName isn't read and
+// nothing is sent. The credential has to allow it.
+function signMessage(
+	node: INode,
+	item: INodeExecutionData,
+	message: unknown,
+	secretKey: unknown,
+	policy: Policy,
+	itemIndex: number,
+): INodeExecutionData {
+	const violation = checkMessageSigning(policy);
+	if (violation !== undefined) {
+		throw new NodeOperationError(node, violation.message, {
+			itemIndex,
+			description: violation.description,
+		});
+	}
+	if (message === undefined || message === null || isBlank(message)) {
+		throw new NodeOperationError(node, "'Message' is empty", {
+			itemIndex,
+			description: `${ENTER_MESSAGE} If it comes from an expression, check that the expression gives a value for this item.`,
+		});
+	}
+	if (typeof message !== 'string') {
+		throw new NodeOperationError(node, "'Message' is not text", {
+			itemIndex,
+			description: `${ENTER_MESSAGE} If it comes from an expression, check that it gives a string, not an object or a number.`,
+		});
+	}
+
+	const keypair = keypairFromSecret(node, secretKey, itemIndex);
+	// The text is signed as it is: trimming it would sign another text.
+	const signature = Buffer.from(keypair.signMessage(message)).toString('base64');
+
+	const newItem: INodeExecutionData = {
+		json: { ...item.json, message, signature, publicKey: keypair.publicKey() },
+		pairedItem: itemIndex,
+	};
+	if (item.binary !== undefined) {
+		newItem.binary = item.binary;
+	}
+	return newItem;
 }
 
 // Any other value, such as the 0.1.1 value mainnet, fails instead of signing for a network the user

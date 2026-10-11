@@ -7,6 +7,7 @@ import type { OperationType, Transaction } from '@stellar/stellar-sdk';
 // The names of the policy fields on the credential screen, for the error texts.
 const LABELS = {
 	allowedOperations: 'Allowed Operations',
+	allowMessageSigning: 'Allow Message Signing',
 };
 
 // The operation types, as the Stellar SDK names each operation of a decoded transaction. The type
@@ -51,10 +52,12 @@ const OPERATION_TYPES = Object.keys(KNOWN_OPERATION_TYPES);
 const HOW_TO_WRITE_OPERATIONS =
 	"Write one operation type per line, with the names the Stellar SDK uses, such as payment, createAccount or pathPaymentStrictSend. The full list is in the credential's documentation.";
 
-// What the credential lets the node sign. A control that is undefined has no limit.
+// What the credential lets the node sign. A limit that is undefined doesn't apply.
 export interface Policy {
 	// Operation types, as the SDK names them.
 	allowedOperations?: string[];
+	// Signing messages is off unless the credential turns it on.
+	allowMessageSigning: boolean;
 }
 
 // A policy field that can't be read. It never repeats what was entered, only where it is: the
@@ -73,7 +76,18 @@ export type PolicyReading = { policy: Policy } | { invalid: PolicyProblem };
 // Reads the policy from the credential's fields. A field that can't be read makes the whole policy
 // invalid: it never counts as "no limit".
 export function readPolicy(credential: Record<string, unknown> | undefined): PolicyReading {
-	const policy: Policy = {};
+	// A switch that was never saved is off.
+	const allowMessageSigning = credential?.allowMessageSigning ?? false;
+	if (typeof allowMessageSigning !== 'boolean') {
+		return {
+			invalid: {
+				field: LABELS.allowMessageSigning,
+				problem: 'is not on or off',
+				fix: 'Turn the switch on or off in the credential. If it comes from an expression, check that it gives true or false.',
+			},
+		};
+	}
+	const policy: Policy = { allowMessageSigning };
 
 	const allowedOperations = readAllowedOperations(credential?.allowedOperations);
 	if (!Array.isArray(allowedOperations)) {
@@ -132,6 +146,18 @@ export function checkPolicy(policy: Policy, transaction: Transaction): PolicyVio
 		}
 	}
 	return undefined;
+}
+
+// Says why the credential doesn't let the node sign a message, or nothing if it does.
+export function checkMessageSigning(policy: Policy): PolicyViolation | undefined {
+	if (policy.allowMessageSigning) {
+		return undefined;
+	}
+	const field = LABELS.allowMessageSigning;
+	return {
+		message: `'${field}' is off in the Stellar Wallet API credential`,
+		description: `Sign Message signs any text it receives with this wallet's key, and a signed text can prove control of the account to another service. Turn on '${field}' in the credential only if this workflow should do that. This item was not signed.`,
+	};
 }
 
 // The lines of a text field that have something, each with its number in the field. A field that
