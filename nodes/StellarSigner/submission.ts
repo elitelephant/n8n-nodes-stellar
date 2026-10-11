@@ -119,11 +119,12 @@ export async function submitTransaction(
 	transaction: Transaction,
 	txHash: string,
 ): Promise<SubmissionResult> {
+	const host = horizon.serverURL.host;
 	let response: unknown;
 	try {
 		response = await horizon.submitTransaction(transaction, { skipMemoRequiredCheck: true });
 	} catch (error) {
-		return { failure: failureFrom(error, transaction, txHash) };
+		return { failure: failureFrom(error, transaction, txHash, host) };
 	}
 	// The SDK takes any 200 as a success. Horizon's answer is the transaction itself: its hash, the
 	// ledger that included it, and successful.
@@ -136,7 +137,13 @@ export async function submitTransaction(
 		return { ledger: response.ledger as number };
 	}
 	return {
-		failure: uncertain(transaction, txHash, "the answer isn't a Horizon result for it", true),
+		failure: uncertain(
+			transaction,
+			txHash,
+			host,
+			"the answer isn't a Horizon result for it",
+			'foreign',
+		),
 	};
 }
 
@@ -151,7 +158,12 @@ const REJECTIONS_TO_DOUBLE_CHECK: Record<string, (transaction: Transaction) => s
 	},
 };
 
-function failureFrom(error: unknown, transaction: Transaction, txHash: string): SubmissionFailure {
+function failureFrom(
+	error: unknown,
+	transaction: Transaction,
+	txHash: string,
+	host: string,
+): SubmissionFailure {
 	const response = isRecord(error) && isRecord(error.response) ? error.response : undefined;
 	const status = typeof response?.status === 'number' ? response.status : undefined;
 
@@ -181,10 +193,11 @@ function failureFrom(error: unknown, transaction: Transaction, txHash: string): 
 		return uncertain(
 			transaction,
 			txHash,
+			host,
 			isTimeout(error)
 				? `no answer in ${REQUEST_TIMEOUT_MS / 1000} seconds`
 				: 'the connection failed',
-			false,
+			'none',
 			error,
 		);
 	}
@@ -209,8 +222,9 @@ function failureFrom(error: unknown, transaction: Transaction, txHash: string): 
 	return uncertain(
 		transaction,
 		txHash,
+		host,
 		`the server answered ${statusText(status)}`,
-		problem === undefined,
+		problem === undefined ? 'foreign' : 'horizon',
 		error,
 	);
 }
@@ -259,13 +273,23 @@ export function addAppliedTransactions(
 	error.context.data = { appliedTransactions: applied.map((transaction) => ({ ...transaction })) };
 }
 
-// Horizon didn't say whether the transaction was applied. foreignAnswer is true when an answer
-// came and it doesn't look like Horizon's, which usually means a wrong Horizon URL.
+// What came back when Horizon gave no verdict: nothing, an error of Horizon's, or an answer that
+// doesn't look like Horizon's, which usually means a wrong Horizon URL. The description starts by
+// naming the server. Only the host: the path of a provider's address can carry a key.
+const UNCERTAIN_ANSWERS = {
+	none: (host: string) => `Horizon at ${host} didn't answer.`,
+	horizon: (host: string) => `Horizon at ${host} answered with an error.`,
+	foreign: (host: string) =>
+		`The answer from ${host} doesn't look like Horizon's: check 'Horizon URL'.`,
+};
+
+// Horizon didn't say whether the transaction was applied.
 function uncertain(
 	transaction: Transaction,
 	txHash: string,
+	host: string,
 	reason: string,
-	foreignAnswer: boolean,
+	answer: keyof typeof UNCERTAIN_ANSWERS,
 	cause?: unknown,
 ): SubmissionFailure {
 	const expiry = expiryOf(transaction);
@@ -276,7 +300,7 @@ function uncertain(
 	return {
 		outcome: 'uncertain',
 		message: `The result of transaction ${txHash} is uncertain: ${reason}`,
-		description: `${foreignAnswer ? "The answer doesn't look like Horizon's: check 'Horizon URL'. " : ''}${until} Sending this same signed transaction again is safe: it can be applied only once. Don't build a new one for this payment until you know.`,
+		description: `${UNCERTAIN_ANSWERS[answer](host)} ${until} Sending this same signed transaction again is safe: it can be applied only once. Don't build a new one for this payment until you know.`,
 		cause,
 	};
 }
