@@ -202,6 +202,27 @@ export class StellarSigner implements INodeType {
 					const result = await submitTransaction(horizon, transaction, txHash);
 					if ('failure' in result) {
 						const { failure } = result;
+						if (this.continueOnFail()) {
+							// The item is already signed, so it says what happened to its transaction
+							// and carries the hash and the signed transaction to look up or resend.
+							// n8n replaces the json of an item that has the error property, so this
+							// one goes out without it, like the HTTP Request node's. With error as
+							// its only key, n8n still sends it to the error output, and there it adds
+							// the input item's fields when pairedItem is an object.
+							returnData.push({
+								json: {
+									error: {
+										message: failure.message,
+										description: failure.description,
+										outcome: failure.outcome,
+										txHash,
+										signedXdr,
+									},
+								},
+								pairedItem: { item: itemIndex },
+							});
+							continue;
+						}
 						throw new NodeOperationError(
 							this.getNode(),
 							failure.cause instanceof Error ? failure.cause : failure.message,
