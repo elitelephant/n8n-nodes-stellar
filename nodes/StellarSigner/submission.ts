@@ -269,7 +269,7 @@ export function addAppliedTransactions(
 	const list = applied.map(({ itemIndex, txHash }) => `item ${itemIndex} ${txHash}`).join(', ');
 	error.message = `${error.message} (${count})`;
 	error.description =
-		`${error.description ?? ''} Already applied in this run, don't send them again: ${list}. Items after this one were not processed. Don't run the workflow from the start: that builds new transactions and pays the applied ones again.`.trim();
+		`${error.description ?? ''} Already applied in this run: ${list}. Items after this one were not processed. Don't run the workflow from the start: that builds new transactions and pays the applied ones again.`.trim();
 	error.context.data = { appliedTransactions: applied.map((transaction) => ({ ...transaction })) };
 }
 
