@@ -152,12 +152,24 @@ Each item is one transaction, and the node submits them one at a time, in order.
 
 ## Credentials
 
-The node uses the **Stellar Wallet API** credential (`stellarWalletApi`), which has one field,
+The node uses the **Stellar Wallet API** credential (`stellarWalletApi`). Its one required field is
 **Secret Key** (`secretKey`). See [CREDENTIALS.md](CREDENTIALS.md) for what the secret key is, how
 to get one on Testnet and how to keep it safe.
 
 The secret key lives only in the credential. The node never returns it in its output or in its error
 messages.
+
+The credential can also limit what the node signs. The limits are optional and empty by default,
+which means no limit:
+
+- **Allowed Operations** (`allowedOperations`): the operation types the node may sign, one per line,
+  such as `payment`. A transaction with any other operation fails the item before it is signed.
+
+A limit that the node can't read fails the whole run before anything is signed. In n8n's Community
+edition, whoever can edit the workflow can also edit the credential, so these limits guard against
+mistakes, not against that person. The limit that always holds is the account: use one with only the
+funds the workflow needs. [CREDENTIALS.md](CREDENTIALS.md#limit-what-the-node-signs) has the
+details.
 
 ## Compatibility
 

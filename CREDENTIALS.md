@@ -30,6 +30,37 @@ The Stellar Signer node signs transactions with the secret key stored in this cr
 Testnet is usually reset 2 to 4 times a year, and a reset deletes every account. After a reset, fund
 the account again or create a new one.
 
+## Limit what the node signs
+
+The credential can limit what the Stellar Signer signs with this secret key. Each limit is optional
+and empty by default, which means no limit. The node checks a transaction against the limits before
+it signs it. An item whose transaction breaks a limit fails and isn't signed.
+
+- **Allowed Operations**: the operation types the node may sign, one per line. With only `payment`
+  here, a transaction that has an `accountMerge` or a `setOptions` operation fails. The node checks
+  every operation of the transaction. The names are the ones the Stellar SDK uses, in any letter
+  case:
+
+  `createAccount`, `payment`, `pathPaymentStrictReceive`, `pathPaymentStrictSend`,
+  `manageSellOffer`, `manageBuyOffer`, `createPassiveSellOffer`, `setOptions`, `changeTrust`,
+  `allowTrust`, `accountMerge`, `inflation`, `manageData`, `bumpSequence`, `createClaimableBalance`,
+  `claimClaimableBalance`, `beginSponsoringFutureReserves`, `endSponsoringFutureReserves`,
+  `revokeAccountSponsorship`, `revokeTrustlineSponsorship`, `revokeOfferSponsorship`,
+  `revokeDataSponsorship`, `revokeClaimableBalanceSponsorship`, `revokeLiquidityPoolSponsorship`,
+  `revokeSignerSponsorship`, `clawback`, `clawbackClaimableBalance`, `setTrustLineFlags`,
+  `liquidityPoolDeposit`, `liquidityPoolWithdraw`, `invokeHostFunction`, `extendFootprintTtl`,
+  `restoreFootprint`.
+
+A limit with a mistake never counts as no limit. If the node can't read one, for example because a
+line isn't an operation type, every run fails before anything is signed, and n8n shows the problem
+when you save the credential.
+
+These limits protect against mistakes and against transactions that reach the workflow from outside.
+They don't protect against someone who can edit the credential. In n8n's Community edition, whoever
+can edit the workflow can also edit its credentials, and so these limits. On the n8n plans that have
+credential sharing, a person who uses a shared credential can't see or change it. The limit that
+always holds is the account itself: use a separate account with only the funds the workflow needs.
+
 ## Keep it safe
 
 - Never share the secret key. Keep it only in this credential: don't paste it into node parameters

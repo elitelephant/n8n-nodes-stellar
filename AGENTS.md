@@ -94,6 +94,8 @@ actual node.
 - Don't break this contract, which existing workflows depend on:
   - the node type and version above
   - the credential name and its `secretKey` field
+  - the credential's optional policy fields, which limit what the node signs and mean no limit when
+    they are empty, as in a credential saved before they existed: `allowedOperations`
   - the parameters `xdr` and `network`, with `testnet` as the default, which n8n does not save in
     the workflow
   - the `networkName` field of each input item (`public` or `testnet`), which must be the same as
@@ -117,6 +119,10 @@ actual node.
   `nodes/shared/network.ts`. Use it from any node that needs them.
 - The secret key lives only in the Stellar Signer's credential. It never appears in the output, in
   error messages or in logs.
+- The signing policy is in `nodes/StellarSigner/policy.ts`, which doesn't import n8n. It reads the
+  credential's policy fields and checks the decoded transaction before the node signs it. A new
+  control goes there. A policy field that can't be read fails the whole run, and its errors give the
+  line number, never the text that was entered.
 - The package is not eligible for n8n Cloud: it has a runtime dependency and its own ESLint config.
 - Format with `npm run format` and check with `npx prettier --check .`.
 
