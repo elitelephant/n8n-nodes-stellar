@@ -72,6 +72,18 @@ export class StellarWalletApi implements ICredentialType {
 				'The addresses this wallet may pay, one per line. A G address also allows its muxed (M) addresses. An M address allows only itself. Leave empty to pay any address.',
 		},
 		{
+			displayName: 'Maximum Fee',
+			name: 'maxFee',
+			type: 'number',
+			typeOptions: {
+				minValue: 0,
+				numberPrecision: 0,
+			},
+			default: 0,
+			description:
+				"The highest fee, in stroops, that a transaction may carry. It is the transaction's total fee, for all its operations. 0 means no limit.",
+		},
+		{
 			displayName: 'Allow Message Signing',
 			name: 'allowMessageSigning',
 			type: 'boolean',

@@ -17,6 +17,7 @@ const LABELS = {
 	maxAmounts: 'Maximum Amounts',
 	allowedAssets: 'Allowed Assets',
 	allowedDestinations: 'Allowed Destinations',
+	maxFee: 'Maximum Fee',
 	allowMessageSigning: 'Allow Message Signing',
 };
 
@@ -90,6 +91,8 @@ export interface Policy {
 	allowedAssets?: string[];
 	// The addresses a payment may go to: G accounts and muxed (M) addresses.
 	allowedDestinations?: string[];
+	// The highest fee a transaction may carry, in stroops.
+	maxFee?: bigint;
 	// Signing messages is off unless the credential turns it on.
 	allowMessageSigning: boolean;
 }
@@ -153,6 +156,14 @@ export function readPolicy(credential: Record<string, unknown> | undefined): Pol
 	}
 	if (allowedDestinations.length > 0) {
 		policy.allowedDestinations = allowedDestinations;
+	}
+
+	const maxFee = readMaxFee(credential?.maxFee);
+	if (typeof maxFee !== 'bigint') {
+		return { invalid: maxFee };
+	}
+	if (maxFee > NO_FEE_LIMIT) {
+		policy.maxFee = maxFee;
 	}
 
 	return { policy };
@@ -257,6 +268,33 @@ function readAllowedDestinations(value: unknown): string[] | PolicyProblem {
 	return addresses;
 }
 
+// The credential's field is a number, and 0 is its default: no limit.
+const NO_FEE_LIMIT = BigInt(0);
+
+// The highest fee, in stroops. An expression can give the number as text, so digits count too.
+function readMaxFee(value: unknown): bigint | PolicyProblem {
+	if (value === undefined || value === null) {
+		return NO_FEE_LIMIT;
+	}
+	if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) {
+		return BigInt(value);
+	}
+	if (typeof value === 'string') {
+		const text = value.trim();
+		if (text === '') {
+			return NO_FEE_LIMIT;
+		}
+		if (/^\d+$/.test(text)) {
+			return BigInt(text);
+		}
+	}
+	return {
+		field: LABELS.maxFee,
+		problem: 'is not a whole number of stroops',
+		fix: 'Enter the highest fee as a whole number of stroops, such as 1000, or 0 for no limit.',
+	};
+}
+
 // What a transaction has that the policy doesn't allow.
 export interface PolicyViolation {
 	message: string;
@@ -266,6 +304,20 @@ export interface PolicyViolation {
 // Returns the first thing in the transaction that the policy doesn't allow. It checks every
 // operation, whatever its source account: a signature counts for the whole transaction.
 export function checkPolicy(policy: Policy, transaction: Transaction): PolicyViolation | undefined {
+	const { maxFee } = policy;
+	if (maxFee !== undefined) {
+		// The SDK gives the fee as text: the total for all the operations, in stroops. A fee that
+		// can't be read counts as over the limit.
+		const fee = /^\d+$/.test(transaction.fee) ? BigInt(transaction.fee) : undefined;
+		if (fee === undefined || fee > maxFee) {
+			const field = LABELS.maxFee;
+			return {
+				message: `'${field}' allows up to ${maxFee} stroops`,
+				description: `The transaction's fee is ${transaction.fee} stroops. '${field}' in the Stellar Wallet API credential allows up to ${maxFee}. ${NOT_SIGNED} Build the transaction with a lower fee, or raise the limit in the credential.`,
+			};
+		}
+	}
+
 	for (let index = 0; index < transaction.operations.length; index++) {
 		const violation = checkOperation(policy, transaction.operations[index], index + 1);
 		if (violation !== undefined) {
