@@ -96,6 +96,13 @@ actual node.
   - the credential name and its `secretKey` field
   - the credential's optional policy fields, which limit what the node signs and mean no limit when
     they are empty, as in a credential saved before they existed: `allowedOperations`
+  - the credential's `allowMessageSigning` switch, off by default: Sign Message fails unless it is
+    on
+  - the `operation` parameter, with `signTransaction` as the default, which n8n does not save in the
+    workflow, so a workflow saved without it signs transactions. The other value is `signMessage`,
+    with the `message` parameter
+  - the output of `signMessage`: the input item's fields plus `message`, `signature` (base64) and
+    `publicKey`, without network fields. It doesn't read `networkName` and doesn't call the network
   - the parameters `xdr` and `network`, with `testnet` as the default, which n8n does not save in
     the workflow
   - the `networkName` field of each input item (`public` or `testnet`), which must be the same as

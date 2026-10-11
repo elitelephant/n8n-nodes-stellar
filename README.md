@@ -1,7 +1,8 @@
 # n8n-nodes-stellar
 
 This is an n8n community node. It lets you sign Stellar transactions in your n8n workflows, with a
-secret key stored in an n8n credential, and optionally submit them to the network.
+secret key stored in an n8n credential, and optionally submit them to the network. It can also sign
+a message with that key.
 
 [Stellar](https://stellar.org/) is a public blockchain network for payments and asset issuance. Its
 native currency is the lumen (XLM).
@@ -23,8 +24,16 @@ the n8n community nodes documentation.
 
 ## Operations
 
-The package has one node, **Stellar Signer**. It signs a Stellar transaction and returns it signed.
-It can also submit the signed transaction to the network, which is off by default.
+The package has one node, **Stellar Signer**, with two operations:
+
+- **Sign Transaction** (`signTransaction`), the default: signs a Stellar transaction and returns it
+  signed. It can also submit the signed transaction to the network, which is off by default.
+- **Sign Message** (`signMessage`): signs a text with the wallet's key. See
+  [Sign a message](#sign-a-message).
+
+A workflow saved before the **Operation** parameter existed signs transactions, as before.
+
+### Sign a transaction
 
 Parameters:
 
@@ -150,6 +159,31 @@ Each item is one transaction, and the node submits them one at a time, in order.
 - An item with the same transaction as an earlier item of the run fails and isn't sent: a
   transaction is applied only once, so it pays once. Build a separate transaction for each payment.
 
+### Sign a message
+
+With **Operation** on **Sign Message**, the node signs the text of the **Message** parameter
+(`message`) with the wallet's key, following
+[SEP-53](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0053.md). It signs
+the text exactly as it arrives, without trimming it. It doesn't need a `networkName` field in the
+item, and it sends nothing to the network.
+
+Each output item keeps the fields of its input item and adds:
+
+| Field       | Description                                         |
+| ----------- | --------------------------------------------------- |
+| `message`   | The text that was signed.                           |
+| `signature` | The signature, 64 bytes as base64.                  |
+| `publicKey` | The public key of the account that signed the text. |
+
+Anyone can check the signature with the Stellar SDK:
+`Keypair.fromPublicKey(publicKey).verifyMessage(message, Buffer.from(signature, 'base64'))`.
+
+Sign Message fails unless **Allow Message Signing** is on in the credential, and it is off by
+default. A signed message proves that the wallet's key signed that text, and other services accept
+such a proof, for example as a login. The node signs whatever text it receives, and n8n has no
+screen that shows the text before it is signed. Don't sign a text that comes from outside the
+workflow, such as a webhook or a form, without checking what it says first.
+
 ## Credentials
 
 The node uses the **Stellar Wallet API** credential (`stellarWalletApi`). Its one required field is
@@ -164,6 +198,8 @@ which means no limit:
 
 - **Allowed Operations** (`allowedOperations`): the operation types the node may sign, one per line,
   such as `payment`. A transaction with any other operation fails the item before it is signed.
+- **Allow Message Signing** (`allowMessageSigning`): off by default. **Sign Message** fails unless
+  it is on.
 
 A limit that the node can't read fails the whole run before anything is signed. In n8n's Community
 edition, whoever can edit the workflow can also edit the credential, so these limits guard against

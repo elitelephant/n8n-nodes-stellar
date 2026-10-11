@@ -83,8 +83,8 @@ description: INodeTypeDescription = {
     parameter.
   - You can choose to not follow this convention **ONLY if it's not applicable to the node you're
     developing** (i.e. data transformation nodes, etc.)
-  - The Stellar Signer has a single action, signing a transaction, so it has no Resource or
-    Operation parameter
+  - The Stellar Signer has no Resource parameter. Its Operation parameter chooses between Sign
+    Transaction, the default, and Sign Message
 
 ## Resource and operation pattern
 

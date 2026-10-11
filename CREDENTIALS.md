@@ -32,9 +32,10 @@ the account again or create a new one.
 
 ## Limit what the node signs
 
-The credential can limit what the Stellar Signer signs with this secret key. Each limit is optional
-and empty by default, which means no limit. The node checks a transaction against the limits before
-it signs it. An item whose transaction breaks a limit fails and isn't signed.
+The credential can limit what the Stellar Signer signs with this secret key. Each limit on
+transactions is optional and empty by default, which means no limit. The node checks a transaction
+against the limits before it signs it. An item whose transaction breaks a limit fails and isn't
+signed.
 
 - **Allowed Operations**: the operation types the node may sign, one per line. With only `payment`
   here, a transaction that has an `accountMerge` or a `setOptions` operation fails. The node checks
@@ -50,6 +51,12 @@ it signs it. An item whose transaction breaks a limit fails and isn't signed.
   `revokeSignerSponsorship`, `clawback`, `clawbackClaimableBalance`, `setTrustLineFlags`,
   `liquidityPoolDeposit`, `liquidityPoolWithdraw`, `invokeHostFunction`, `extendFootprintTtl`,
   `restoreFootprint`.
+
+- **Allow Message Signing**: whether the node may sign messages with this key, with its **Sign
+  Message** operation. It is off by default, and Sign Message fails while it is off. Leave it off
+  unless a workflow needs it. A signed message proves that this key signed a text, and other
+  services accept such a proof, for example as a login. The node signs whatever text it receives, so
+  turn it on only for a workflow that controls what that text says.
 
 A limit with a mistake never counts as no limit. If the node can't read one, for example because a
 line isn't an operation type, every run fails before anything is signed. n8n also checks the limits
