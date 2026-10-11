@@ -61,18 +61,23 @@ signed. These limits don't apply to messages, which have their own switch.
   without a line has no limit. The limit is for each operation, not for the transaction or the run:
   ten payments of 10 pass a limit of 10.
 
+- **Allowed Assets**: the assets the node may pay in, one per line, written as in **Maximum
+  Amounts**: `XLM`, or `CODE:ISSUER`. The issuer is part of the asset, so the same code from another
+  issuer isn't in the list. A path payment needs both the asset it sends and the asset it delivers.
+  A `createAccount` pays in XLM.
+
 - **Allow Message Signing**: whether the node may sign messages with this key, with its **Sign
   Message** operation. It is off by default, and Sign Message fails while it is off. Leave it off
   unless a workflow needs it. A signed message proves that this key signed a text, and other
   services accept such a proof, for example as a login. The node signs whatever text it receives, so
   turn it on only for a workflow that controls what that text says.
 
-**Maximum Amounts** can only be checked on those four payment operations. While it is set and
-**Allowed Operations** is empty, the node signs only those four types and fails any other operation,
-such as an `accountMerge`, an offer, a liquidity pool operation or a Soroban contract call. To sign
-another type with the same credential, list it in **Allowed Operations** together with the payment
-types. The node then signs it without looking at its amounts: only the list of types covers offers,
-liquidity pools and Soroban.
+**Maximum Amounts** and **Allowed Assets** can only be checked on those four payment operations.
+While either is set and **Allowed Operations** is empty, the node signs only those four types and
+fails any other operation, such as an `accountMerge`, an offer, a liquidity pool operation or a
+Soroban contract call. To sign another type with the same credential, list it in **Allowed
+Operations** together with the payment types. The node then signs it without looking at its amounts
+or assets: only the list of types covers offers, liquidity pools and Soroban.
 
 A limit with a mistake never counts as no limit. If the node can't read one, for example because a
 line isn't an operation type, every run fails before anything is signed. n8n also checks the limits

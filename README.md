@@ -201,10 +201,14 @@ The credential can also limit what the node signs:
 - **Allowed Operations** (`allowedOperations`): the operation types the node may sign, one per line,
   such as `payment`. A transaction with any other operation fails the item before it is signed.
 - **Maximum Amounts** (`maxAmounts`): the most that one operation may send of each asset, one limit
-  per line, as `XLM=100` or `CODE:ISSUER=100`. While it is set, the node signs only payment
-  operations, unless **Allowed Operations** lists other types.
+  per line, as `XLM=100` or `CODE:ISSUER=100`.
+- **Allowed Assets** (`allowedAssets`): the assets the node may pay in, one per line, as `XLM` or
+  `CODE:ISSUER`. A path payment needs the asset it sends and the asset it delivers.
 - **Allow Message Signing** (`allowMessageSigning`): off by default. **Sign Message** fails unless
   it is on.
+
+While **Maximum Amounts** or **Allowed Assets** is set, the node signs only payment operations,
+unless **Allowed Operations** lists other types.
 
 The limits on transactions are optional and empty by default, which means no limit. They don't apply
 to messages. A limit that the node can't read fails the whole run before anything is signed. In
