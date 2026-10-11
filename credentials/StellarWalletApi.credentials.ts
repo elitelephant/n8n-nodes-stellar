@@ -33,7 +33,7 @@ export class StellarWalletApi implements ICredentialType {
 			default: '',
 			placeholder: 'e.g. payment',
 			description:
-				"The operation types this wallet may sign, one per line, such as payment or createAccount. Leave empty to sign any operation. A transaction with any other operation fails and isn't signed.",
+				"The operation types this wallet may sign, one per line, such as payment or createAccount. A transaction with any other operation fails and isn't signed. Leave empty to sign any operation, or only payment operations while Maximum Amounts, Allowed Assets or Allowed Destinations is set.",
 		},
 		{
 			displayName: 'Maximum Amounts',
@@ -45,7 +45,7 @@ export class StellarWalletApi implements ICredentialType {
 			default: '',
 			placeholder: 'e.g. XLM=100',
 			description:
-				'The highest amount of each asset that one operation may send, one per line, as XLM=100 or CODE:ISSUER=100. An asset without a line has no limit. Leave empty for no limits.',
+				'The highest amount of each asset that one operation may send, one per line, as XLM=100 or CODE:ISSUER=100, where ISSUER is the address of the account that issues the asset. An asset without a line has no limit. Leave empty for no limits.',
 		},
 		{
 			displayName: 'Allowed Assets',
@@ -57,7 +57,7 @@ export class StellarWalletApi implements ICredentialType {
 			default: '',
 			placeholder: 'e.g. XLM',
 			description:
-				'The assets this wallet may pay in, one per line, as XLM or CODE:ISSUER. A path payment needs both the asset it sends and the asset it delivers. Leave empty to pay in any asset.',
+				'The assets this wallet may pay in, one per line, as XLM or CODE:ISSUER, where ISSUER is the address of the account that issues the asset. A path payment needs both the asset it sends and the asset it delivers. Leave empty to pay in any asset.',
 		},
 		{
 			displayName: 'Allowed Destinations',
@@ -81,7 +81,7 @@ export class StellarWalletApi implements ICredentialType {
 			},
 			default: 0,
 			description:
-				"The highest fee, in stroops, that a transaction may carry. It is the transaction's total fee, for all its operations. 0 means no limit.",
+				"The highest fee that a transaction may carry, in stroops: 1 XLM is 10,000,000 stroops. It is the transaction's total fee, for all its operations. 0 means no limit.",
 		},
 		{
 			displayName: 'Allow Message Signing',

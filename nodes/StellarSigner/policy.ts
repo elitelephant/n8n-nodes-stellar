@@ -60,8 +60,8 @@ const KNOWN_OPERATION_TYPES: Record<OperationType, true> = {
 };
 const OPERATION_TYPES = Object.keys(KNOWN_OPERATION_TYPES);
 
-// The operations that pay someone. They are the only ones the limits on amounts can be checked
-// against.
+// The names of the operations that pay someone, for the error text. They are the ones outflowOf
+// reads, and the only ones the limits on amounts, assets and destinations can be checked against.
 const PAYMENT_TYPES = [
 	'payment',
 	'pathPaymentStrictSend',
@@ -78,7 +78,11 @@ const HOW_TO_WRITE_ASSETS =
 const HOW_TO_WRITE_DESTINATIONS =
 	'Write one account address per line: 56 characters starting with G, or a muxed address of 69 characters starting with M.';
 
+const IN_CREDENTIAL = 'in the Stellar Wallet API credential';
 const NOT_SIGNED = 'This item was not signed.';
+
+// The credential's fee field is a number, and 0 is its default: no limit.
+const NO_FEE_LIMIT = BigInt(0);
 
 // What the credential lets the node sign. A limit that is undefined doesn't apply.
 export interface Policy {
@@ -126,7 +130,14 @@ export function readPolicy(credential: Record<string, unknown> | undefined): Pol
 	}
 	const policy: Policy = { allowMessageSigning };
 
-	const allowedOperations = readAllowedOperations(credential?.allowedOperations);
+	const allowedOperations = readList(
+		credential?.allowedOperations,
+		LABELS.allowedOperations,
+		'an operation type',
+		HOW_TO_WRITE_OPERATIONS,
+		// The list keeps the SDK's spelling, whatever the letter case of the line.
+		(text) => OPERATION_TYPES.find((name) => name.toLowerCase() === text.toLowerCase()),
+	);
 	if (!Array.isArray(allowedOperations)) {
 		return { invalid: allowedOperations };
 	}
@@ -142,7 +153,13 @@ export function readPolicy(credential: Record<string, unknown> | undefined): Pol
 		policy.maxAmounts = maxAmounts;
 	}
 
-	const allowedAssets = readAllowedAssets(credential?.allowedAssets);
+	const allowedAssets = readList(
+		credential?.allowedAssets,
+		LABELS.allowedAssets,
+		'an asset',
+		HOW_TO_WRITE_ASSETS,
+		readAsset,
+	);
 	if (!Array.isArray(allowedAssets)) {
 		return { invalid: allowedAssets };
 	}
@@ -150,7 +167,17 @@ export function readPolicy(credential: Record<string, unknown> | undefined): Pol
 		policy.allowedAssets = allowedAssets;
 	}
 
-	const allowedDestinations = readAllowedDestinations(credential?.allowedDestinations);
+	const allowedDestinations = readList(
+		credential?.allowedDestinations,
+		LABELS.allowedDestinations,
+		'a Stellar address',
+		HOW_TO_WRITE_DESTINATIONS,
+		// The SDK decides which addresses are valid.
+		(text) =>
+			StrKey.isValidEd25519PublicKey(text) || StrKey.isValidMed25519PublicKey(text)
+				? text
+				: undefined,
+	);
 	if (!Array.isArray(allowedDestinations)) {
 		return { invalid: allowedDestinations };
 	}
@@ -169,28 +196,30 @@ export function readPolicy(credential: Record<string, unknown> | undefined): Pol
 	return { policy };
 }
 
-// The operation types of the list, with the SDK's spelling and without repeats.
-function readAllowedOperations(value: unknown): string[] | PolicyProblem {
-	const field = LABELS.allowedOperations;
+// Reads a field that has one entry per line. readEntry gives the entry of a line, or undefined
+// when the line isn't one. An entry on two lines is kept once.
+function readList(
+	value: unknown,
+	field: string,
+	entryName: string,
+	fix: string,
+	readEntry: (text: string) => string | undefined,
+): string[] | PolicyProblem {
 	const lines = linesOf(value);
 	if (lines === undefined) {
-		return { field, problem: 'is not text', fix: HOW_TO_WRITE_OPERATIONS };
+		return { field, problem: 'is not text', fix };
 	}
-	const types: string[] = [];
+	const entries: string[] = [];
 	for (const { text, lineNumber } of lines) {
-		const type = OPERATION_TYPES.find((name) => name.toLowerCase() === text.toLowerCase());
-		if (type === undefined) {
-			return {
-				field,
-				problem: `has a line that isn't an operation type (line ${lineNumber})`,
-				fix: HOW_TO_WRITE_OPERATIONS,
-			};
+		const entry = readEntry(text);
+		if (entry === undefined) {
+			return { field, problem: `has a line that isn't ${entryName} (line ${lineNumber})`, fix };
 		}
-		if (!types.includes(type)) {
-			types.push(type);
+		if (!entries.includes(entry)) {
+			entries.push(entry);
 		}
 	}
-	return types;
+	return entries;
 }
 
 // The limit of each asset, from lines such as XLM=100. An asset on two lines is a mistake: the
@@ -225,52 +254,6 @@ function readMaxAmounts(value: unknown): Map<string, bigint> | PolicyProblem {
 	return limits;
 }
 
-// The assets of the list, as the policy writes them.
-function readAllowedAssets(value: unknown): string[] | PolicyProblem {
-	const field = LABELS.allowedAssets;
-	const lines = linesOf(value);
-	if (lines === undefined) {
-		return { field, problem: 'is not text', fix: HOW_TO_WRITE_ASSETS };
-	}
-	const assets: string[] = [];
-	for (const { text, lineNumber } of lines) {
-		const asset = readAsset(text);
-		if (asset === undefined) {
-			return {
-				field,
-				problem: `has a line that isn't an asset (line ${lineNumber})`,
-				fix: HOW_TO_WRITE_ASSETS,
-			};
-		}
-		assets.push(asset);
-	}
-	return assets;
-}
-
-// The addresses of the list. The SDK decides which addresses are valid.
-function readAllowedDestinations(value: unknown): string[] | PolicyProblem {
-	const field = LABELS.allowedDestinations;
-	const lines = linesOf(value);
-	if (lines === undefined) {
-		return { field, problem: 'is not text', fix: HOW_TO_WRITE_DESTINATIONS };
-	}
-	const addresses: string[] = [];
-	for (const { text, lineNumber } of lines) {
-		if (!StrKey.isValidEd25519PublicKey(text) && !StrKey.isValidMed25519PublicKey(text)) {
-			return {
-				field,
-				problem: `has a line that isn't a Stellar address (line ${lineNumber})`,
-				fix: HOW_TO_WRITE_DESTINATIONS,
-			};
-		}
-		addresses.push(text);
-	}
-	return addresses;
-}
-
-// The credential's field is a number, and 0 is its default: no limit.
-const NO_FEE_LIMIT = BigInt(0);
-
 // The highest fee, in stroops. An expression can give the number as text, so digits count too.
 function readMaxFee(value: unknown): bigint | PolicyProblem {
 	if (value === undefined || value === null) {
@@ -295,7 +278,9 @@ function readMaxFee(value: unknown): bigint | PolicyProblem {
 	};
 }
 
-// What a transaction has that the policy doesn't allow.
+// What a transaction has that the policy doesn't allow. The message never carries text that comes
+// from the transaction, such as an address or an asset code: n8n replaces a message that happens
+// to contain one of Node's error codes. Those go in the description.
 export interface PolicyViolation {
 	message: string;
 	description: string;
@@ -312,8 +297,8 @@ export function checkPolicy(policy: Policy, transaction: Transaction): PolicyVio
 		if (fee === undefined || fee > maxFee) {
 			const field = LABELS.maxFee;
 			return {
-				message: `'${field}' allows up to ${maxFee} stroops`,
-				description: `The transaction's fee is ${transaction.fee} stroops. '${field}' in the Stellar Wallet API credential allows up to ${maxFee}. ${NOT_SIGNED} Build the transaction with a lower fee, or raise the limit in the credential.`,
+				message: `The transaction's fee is over '${field}'`,
+				description: `The transaction's fee is ${transaction.fee} stroops. '${field}' ${IN_CREDENTIAL} allows up to ${maxFee}. ${NOT_SIGNED} Build the transaction with a lower fee, or raise the limit in the credential.`,
 			};
 		}
 	}
@@ -331,10 +316,11 @@ export function checkPolicy(policy: Policy, transaction: Transaction): PolicyVio
 function checkOperation(
 	policy: Policy,
 	operation: OperationRecord,
-	number: number,
+	operationNumber: number,
 ): PolicyViolation | undefined {
 	const { type } = operation;
-	const credential = 'in the Stellar Wallet API credential';
+	const outflow = outflowOf(operation);
+	const start = `Operation ${operationNumber} of the transaction`;
 
 	const { allowedOperations } = policy;
 	if (allowedOperations !== undefined) {
@@ -342,18 +328,17 @@ function checkOperation(
 			const field = LABELS.allowedOperations;
 			return {
 				message: `'${field}' doesn't include ${type}`,
-				description: `Operation ${number} of the transaction is ${type}. '${field}' ${credential} lists ${allowedOperations.join(', ')}. ${NOT_SIGNED} Build the transaction without that operation, or add ${type} to '${field}'.`,
+				description: `${start} is ${type}. '${field}' ${IN_CREDENTIAL} lists ${allowedOperations.join(', ')}. ${NOT_SIGNED} Build the transaction without that operation, or add ${type} to '${field}'.`,
 			};
 		}
-	} else if (limitsPayments(policy) && !PAYMENT_TYPES.includes(type)) {
+	} else if (limitsPayments(policy) && outflow === undefined) {
 		// What can't be checked against the limits isn't signed, unless the credential names it.
 		return {
-			message: `This credential signs only payments, and operation ${number} is ${type}`,
+			message: `This credential signs only payments, and operation ${operationNumber} is ${type}`,
 			description: `The Stellar Wallet API credential has limits on amounts, destinations or assets, and only ${listOf(PAYMENT_TYPES)} operations can be checked against them. ${NOT_SIGNED} To sign ${type} with this credential, list it in '${LABELS.allowedOperations}' together with the payment types it should sign.`,
 		};
 	}
 
-	const outflow = outflowOf(operation);
 	if (outflow === undefined) {
 		return undefined;
 	}
@@ -363,12 +348,10 @@ function checkOperation(
 		allowedDestinations !== undefined &&
 		!isAllowedDestination(allowedDestinations, outflow.destination)
 	) {
-		// The address goes in the description only: n8n replaces a message that happens to contain
-		// one of Node's error codes, and an address can.
 		const field = LABELS.allowedDestinations;
 		return {
-			message: `'${field}' doesn't include the destination of operation ${number}`,
-			description: `Operation ${number} of the transaction (${type}) pays ${outflow.destination}, which isn't in '${field}' ${credential}. ${NOT_SIGNED} Check the destination, or add it to '${field}'.`,
+			message: `'${field}' doesn't include the destination of operation ${operationNumber}`,
+			description: `${start} (${type}) pays ${outflow.destination}, which isn't in '${field}' ${IN_CREDENTIAL}. ${NOT_SIGNED} Check the destination, or add it to '${field}'.`,
 		};
 	}
 
@@ -386,26 +369,27 @@ function checkOperation(
 			if (!allowedAssets.includes(assetKey(end))) {
 				const field = LABELS.allowedAssets;
 				return {
-					message: `'${field}' doesn't include ${codeOf(end)}`,
-					description: `Operation ${number} of the transaction (${type}) ${verb} ${assetKey(end)}, which isn't in '${field}' ${credential}. ${NOT_SIGNED} Pay in an asset of the list, or add that asset to '${field}'.`,
+					message: `'${field}' doesn't include an asset of operation ${operationNumber}`,
+					description: `${start} (${type}) ${verb} ${assetKey(end)}, which isn't in '${field}' ${IN_CREDENTIAL}. ${NOT_SIGNED} Use an asset of the list, or add that asset to '${field}'.`,
 				};
 			}
 		}
 	}
 
-	const asset = assetKey(outflow.asset);
-	const limit = policy.maxAmounts?.get(asset);
+	const key = assetKey(outflow.asset);
+	const limit = policy.maxAmounts?.get(key);
 	if (limit !== undefined) {
 		// An amount that can't be read counts as over the limit.
 		const sent = readAmount(outflow.amount);
 		if (sent === undefined || sent > limit) {
 			const field = LABELS.maxAmounts;
-			const code = codeOf(outflow.asset);
-			const sends = outflow.isCeiling ? 'may send up to' : 'sends';
+			const [sends, sendsInFull] = outflow.isCeiling
+				? ['may send', 'may send up to']
+				: ['sends', 'sends'];
 			const amount = sent === undefined ? outflow.amount : writeAmount(sent);
 			return {
-				message: `'${field}' allows up to ${writeAmount(limit)} ${code} per operation`,
-				description: `Operation ${number} of the transaction (${type}) ${sends} ${amount} ${asset}. '${field}' ${credential} allows up to ${writeAmount(limit)} ${asset} per operation. ${NOT_SIGNED} Lower the amount, or raise the limit in the credential.`,
+				message: `Operation ${operationNumber} ${sends} more than '${field}' allows`,
+				description: `${start} (${type}) ${sendsInFull} ${amount} ${key}. '${field}' ${IN_CREDENTIAL} allows up to ${writeAmount(limit)} ${key} per operation. ${NOT_SIGNED} Lower the amount, or raise the limit in the credential.`,
 			};
 		}
 	}
@@ -422,7 +406,7 @@ function limitsPayments(policy: Policy): boolean {
 	);
 }
 
-// What a payment operation takes out of the account.
+// What a payment operation takes out of the account, and where it goes.
 interface Outflow {
 	// As the SDK gives it: a decimal with 7 digits.
 	amount: string;
@@ -435,6 +419,7 @@ interface Outflow {
 	destination: string;
 }
 
+// Undefined for an operation that isn't a payment.
 function outflowOf(operation: OperationRecord): Outflow | undefined {
 	switch (operation.type) {
 		case 'payment':
@@ -490,7 +475,7 @@ export function checkMessageSigning(policy: Policy): PolicyViolation | undefined
 	}
 	const field = LABELS.allowMessageSigning;
 	return {
-		message: `'${field}' is off in the Stellar Wallet API credential`,
+		message: `'${field}' is off ${IN_CREDENTIAL}`,
 		description: `Sign Message signs any text it receives with this wallet's key, and a signed text can prove control of the account to another service. Turn on '${field}' in the credential only if this workflow should do that. ${NOT_SIGNED}`,
 	};
 }
@@ -501,19 +486,15 @@ function assetKey(asset: Asset): string {
 	return asset.isNative() ? 'XLM' : `${asset.getCode()}:${asset.getIssuer()}`;
 }
 
-// The asset's short name, for an error message. The issuer goes in the description.
-function codeOf(asset: Asset): string {
-	return asset.isNative() ? 'XLM' : asset.getCode();
-}
-
 // Reads XLM or CODE:ISSUER. The SDK decides which codes and issuers are valid. Undefined if the
 // text is neither.
 function readAsset(text: string): string | undefined {
 	if (text.toUpperCase() === 'XLM') {
 		return 'XLM';
 	}
+	// Without an issuer, the SDK would take the code XLM as the native asset.
 	const parts = text.split(':');
-	if (parts.length !== 2) {
+	if (parts.length !== 2 || parts[1] === '') {
 		return undefined;
 	}
 	try {

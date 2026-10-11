@@ -60,7 +60,10 @@ their own switch.
   account: the amount of a `payment`, what a `pathPaymentStrictSend` sends, the most a
   `pathPaymentStrictReceive` may send, and the starting balance of a `createAccount`. An asset
   without a line has no limit. The limit is for each operation, not for the transaction or the run:
-  ten payments of 10 pass a limit of 10.
+  ten payments of 10 pass a limit of 10. A limit of 0 means the node sends none of that asset,
+  unlike **Maximum Fee**, where 0 means no limit. Asset codes are case-sensitive, so a limit for
+  `usdc` is not a limit for `USDC`. To pay only in the assets that have a limit, list them in
+  **Allowed Assets** too.
 
 - **Allowed Assets**: the assets the node may pay in, one per line, written as in **Maximum
   Amounts**: `XLM`, or `CODE:ISSUER`. The issuer is part of the asset, so the same code from another

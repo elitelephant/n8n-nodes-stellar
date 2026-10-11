@@ -95,8 +95,8 @@ actual node.
   - the node type and version above
   - the credential name and its `secretKey` field
   - the credential's optional policy fields, which limit what the node signs and mean no limit when
-    they are empty, as in a credential saved before they existed: `allowedOperations`, `maxAmounts`,
-    `allowedAssets`, `allowedDestinations` and `maxFee`
+    they are empty, or 0 for `maxFee`, as in a credential saved before they existed:
+    `allowedOperations`, `maxAmounts`, `allowedAssets`, `allowedDestinations` and `maxFee`
   - the credential's `allowMessageSigning` switch, off by default: Sign Message fails unless it is
     on
   - the `operation` parameter, with `signTransaction` as the default, which n8n does not save in the
