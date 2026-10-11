@@ -23,5 +23,17 @@ export class StellarWalletApi implements ICredentialType {
 			placeholder: 'e.g. SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
 			description: 'The secret key of your Stellar wallet (starts with S)',
 		},
+		{
+			displayName: 'Allowed Operations',
+			name: 'allowedOperations',
+			type: 'string',
+			typeOptions: {
+				rows: 4,
+			},
+			default: '',
+			placeholder: 'e.g. payment',
+			description:
+				"The operation types this wallet may sign, one per line, such as payment or createAccount. Leave empty to sign any operation. A transaction with any other operation fails and isn't signed.",
+		},
 	];
 }

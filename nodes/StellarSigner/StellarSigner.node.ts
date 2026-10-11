@@ -12,6 +12,7 @@ import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import { type Horizon, Keypair, Transaction, xdr } from '@stellar/stellar-sdk';
 
 import { isNetworkName, NETWORK_PASSPHRASES, type NetworkName } from '../shared/network';
+import { checkPolicy, readPolicy } from './policy';
 import {
 	addAppliedTransactions,
 	type AppliedTransaction,
@@ -111,17 +112,24 @@ export class StellarSigner implements INodeType {
 				credential: ICredentialsDecrypted,
 			): Promise<INodeCredentialTestResult> {
 				const secretKey = credential.data?.secretKey;
+				let keypair: Keypair;
 				try {
 					// The SDK decides first, also when the value isn't text.
-					const keypair = Keypair.fromSecret(secretKey as string);
-					return {
-						status: 'OK',
-						message: `Valid secret key for public key ${keypair.publicKey()}`,
-					};
+					keypair = Keypair.fromSecret(secretKey as string);
 				} catch (error) {
 					const { problem, fix } = explainInvalidSecretKey(secretKey, error);
 					return { status: 'Error', message: `'Secret Key' ${problem}. ${fix}` };
 				}
+				// A policy that can't be read would fail every run, so saving the credential warns.
+				const reading = readPolicy(credential.data);
+				if ('invalid' in reading) {
+					const { field, problem, fix } = reading.invalid;
+					return { status: 'Error', message: `'${field}' ${problem}. ${fix}` };
+				}
+				return {
+					status: 'OK',
+					message: `Valid secret key for public key ${keypair.publicKey()}`,
+				};
 			},
 		},
 	};
@@ -136,6 +144,19 @@ export class StellarSigner implements INodeType {
 		if (isBlank(secretKey)) {
 			keypairFromSecret(this.getNode(), secretKey);
 		}
+
+		// A policy that can't be read fails the whole run too, before the items: it never counts
+		// as "no limit".
+		const reading = readPolicy(credentials);
+		if ('invalid' in reading) {
+			const { field, problem, fix } = reading.invalid;
+			throw new NodeOperationError(
+				this.getNode(),
+				`'${field}' in the Stellar Wallet API credential ${problem}`,
+				{ description: `${fix} Nothing was signed.` },
+			);
+		}
+		const { policy } = reading;
 
 		const returnData: INodeExecutionData[] = [];
 		// With Submit to Horizon on: the transactions Horizon applied in this run, and the item that
@@ -184,6 +205,15 @@ export class StellarSigner implements INodeType {
 					networkPassphrase,
 					itemIndex,
 				);
+				// The credential's policy is checked on the decoded transaction, before anything
+				// is signed or asked to the network.
+				const violation = checkPolicy(policy, transaction);
+				if (violation !== undefined) {
+					throw new NodeOperationError(this.getNode(), violation.message, {
+						itemIndex,
+						description: violation.description,
+					});
+				}
 				// The last check before signing, and the only one that needs the network.
 				if (horizon !== undefined) {
 					await checkMemoRequired(this.getNode(), horizon, transaction, itemIndex);
