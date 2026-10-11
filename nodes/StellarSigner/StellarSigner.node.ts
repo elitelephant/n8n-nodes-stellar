@@ -86,14 +86,14 @@ export class StellarSigner implements INodeType {
 				name: 'horizonUrl',
 				type: 'string',
 				default: '',
-				placeholder: 'e.g. https://horizon-testnet.stellar.org',
+				placeholder: 'e.g. https://horizon.example.com',
 				displayOptions: {
 					show: {
 						submit: [true],
 					},
 				},
 				description:
-					"The Horizon server to submit to. Leave empty to use SDF's server for the network: horizon-testnet.stellar.org for testnet and horizon.stellar.org for public. Stellar's documentation no longer lists the public one, so enter your provider's address if it stops answering.",
+					"The Horizon server to submit to, as an https address. Leave empty to use SDF's server for the network: horizon-testnet.stellar.org for testnet and horizon.stellar.org for public. Stellar's documentation no longer lists the public server, so enter your provider's address if it stops answering.",
 			},
 		],
 	};
@@ -260,16 +260,17 @@ function horizonServerFor(
 	try {
 		return new Horizon.Server(url);
 	} catch (error) {
-		// The SDK only connects over https.
-		if (protocol !== 'https:') {
-			throw new NodeOperationError(node, error, {
-				itemIndex,
-				message: "'Horizon URL' must start with https://",
-				description:
-					"This node only submits to a Horizon server over https. Enter an https address, or leave the field empty to use SDF's server for the network.",
-			});
-		}
-		throw new NodeOperationError(node, error, { itemIndex });
+		// The SDK only connects over https. It has no other reason to refuse a URL today, but if it
+		// finds one, the error still names the field.
+		throw new NodeOperationError(node, error, {
+			itemIndex,
+			message:
+				protocol === 'https:'
+					? "'Horizon URL' can't be used"
+					: "'Horizon URL' must start with https://",
+			description:
+				"This node only submits to a Horizon server over https. Enter an https address, or leave the field empty to use SDF's server for the network.",
+		});
 	}
 }
 

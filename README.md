@@ -1,7 +1,7 @@
 # n8n-nodes-stellar
 
 This is an n8n community node. It lets you sign Stellar transactions in your n8n workflows, with a
-secret key stored in an n8n credential, and submit them to the network.
+secret key stored in an n8n credential, and optionally submit them to the network.
 
 [Stellar](https://stellar.org/) is a public blockchain network for payments and asset issuance. Its
 native currency is the lumen (XLM).
@@ -33,7 +33,8 @@ Parameters:
   this network.
 - **Submit to Horizon** (`submit`): off by default. When it is on, the node submits the transaction
   it signed to the network through [Horizon](https://developers.stellar.org/docs/data/apis/horizon)
-  and waits for the result. It submits once and doesn't retry.
+  and waits for the result. It submits once and doesn't retry. If the value comes from an
+  expression, it must be `true` or `false`: n8n fails the item for any other text.
 - **Horizon URL** (`horizonUrl`): shown when **Submit to Horizon** is on, and empty by default. Set
   it to submit to another Horizon server, such as your own or a provider's. It must be an `https`
   address. It accepts an expression, so several nodes can share one address from a variable.
@@ -73,7 +74,12 @@ your provider's address in **Horizon URL**. Each output item also has:
 | `submitted` | `true`: Horizon confirmed the transaction.              |
 | `ledger`    | The number of the ledger that included the transaction. |
 
-If Horizon doesn't confirm the transaction, the item fails.
+Before it submits a payment that has no memo, the node asks that Horizon server whether the
+destination account requires one
+([SEP-29](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0029.md)).
+
+If Horizon doesn't confirm the transaction, the item fails. The transaction may still have reached
+the network, so check the account's transactions before you send it again.
 
 ## Credentials
 
