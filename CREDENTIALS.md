@@ -52,8 +52,9 @@ it signs it. An item whose transaction breaks a limit fails and isn't signed.
   `restoreFootprint`.
 
 A limit with a mistake never counts as no limit. If the node can't read one, for example because a
-line isn't an operation type, every run fails before anything is signed, and n8n shows the problem
-when you save the credential.
+line isn't an operation type, every run fails before anything is signed. n8n also checks the limits
+when you save the credential: if one has a mistake, it says that the credential test failed, and
+**More details** shows which field and which line.
 
 These limits protect against mistakes and against transactions that reach the workflow from outside.
 They don't protect against someone who can edit the credential. In n8n's Community edition, whoever

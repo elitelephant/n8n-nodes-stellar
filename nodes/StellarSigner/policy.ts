@@ -1,49 +1,55 @@
-import type { Transaction } from '@stellar/stellar-sdk';
+import type { OperationType, Transaction } from '@stellar/stellar-sdk';
 
 // The signing policy: the limits that the Stellar Wallet API credential puts on what the node
 // signs. This module doesn't depend on n8n. It reads the credential's fields and checks a decoded
 // transaction against them.
 
-// The operation types of Stellar SDK 17.1.0, as it names each operation of a decoded transaction.
-const OPERATION_TYPES = [
-	'createAccount',
-	'payment',
-	'pathPaymentStrictReceive',
-	'pathPaymentStrictSend',
-	'manageSellOffer',
-	'manageBuyOffer',
-	'createPassiveSellOffer',
-	'setOptions',
-	'changeTrust',
-	'allowTrust',
-	'accountMerge',
-	'inflation',
-	'manageData',
-	'bumpSequence',
-	'createClaimableBalance',
-	'claimClaimableBalance',
-	'beginSponsoringFutureReserves',
-	'endSponsoringFutureReserves',
-	'revokeAccountSponsorship',
-	'revokeTrustlineSponsorship',
-	'revokeOfferSponsorship',
-	'revokeDataSponsorship',
-	'revokeClaimableBalanceSponsorship',
-	'revokeLiquidityPoolSponsorship',
-	'revokeSignerSponsorship',
-	'clawback',
-	'clawbackClaimableBalance',
-	'setTrustLineFlags',
-	'liquidityPoolDeposit',
-	'liquidityPoolWithdraw',
-	'invokeHostFunction',
-	'extendFootprintTtl',
-	'restoreFootprint',
-];
+// The names of the policy fields on the credential screen, for the error texts.
+const LABELS = {
+	allowedOperations: 'Allowed Operations',
+};
 
-const ALLOWED_OPERATIONS = 'Allowed Operations';
+// The operation types, as the Stellar SDK names each operation of a decoded transaction. The type
+// makes the build fail if an SDK update adds a type that isn't here.
+const KNOWN_OPERATION_TYPES: Record<OperationType, true> = {
+	createAccount: true,
+	payment: true,
+	pathPaymentStrictReceive: true,
+	pathPaymentStrictSend: true,
+	manageSellOffer: true,
+	manageBuyOffer: true,
+	createPassiveSellOffer: true,
+	setOptions: true,
+	changeTrust: true,
+	allowTrust: true,
+	accountMerge: true,
+	inflation: true,
+	manageData: true,
+	bumpSequence: true,
+	createClaimableBalance: true,
+	claimClaimableBalance: true,
+	beginSponsoringFutureReserves: true,
+	endSponsoringFutureReserves: true,
+	revokeAccountSponsorship: true,
+	revokeTrustlineSponsorship: true,
+	revokeOfferSponsorship: true,
+	revokeDataSponsorship: true,
+	revokeClaimableBalanceSponsorship: true,
+	revokeLiquidityPoolSponsorship: true,
+	revokeSignerSponsorship: true,
+	clawback: true,
+	clawbackClaimableBalance: true,
+	setTrustLineFlags: true,
+	liquidityPoolDeposit: true,
+	liquidityPoolWithdraw: true,
+	invokeHostFunction: true,
+	extendFootprintTtl: true,
+	restoreFootprint: true,
+};
+const OPERATION_TYPES = Object.keys(KNOWN_OPERATION_TYPES);
+
 const HOW_TO_WRITE_OPERATIONS =
-	'Write one operation type per line, with the names the Stellar SDK uses, such as payment, createAccount or pathPaymentStrictSend. The full list is in CREDENTIALS.md.';
+	"Write one operation type per line, with the names the Stellar SDK uses, such as payment, createAccount or pathPaymentStrictSend. The full list is in the credential's documentation.";
 
 // What the credential lets the node sign. A control that is undefined has no limit.
 export interface Policy {
@@ -69,29 +75,39 @@ export type PolicyReading = { policy: Policy } | { invalid: PolicyProblem };
 export function readPolicy(credential: Record<string, unknown> | undefined): PolicyReading {
 	const policy: Policy = {};
 
-	const lines = linesOf(credential?.allowedOperations);
-	if (lines === undefined) {
-		return invalid(ALLOWED_OPERATIONS, 'is not text', HOW_TO_WRITE_OPERATIONS);
-	}
-	const allowedOperations: string[] = [];
-	for (const { text, number } of lines) {
-		const type = OPERATION_TYPES.find((name) => name.toLowerCase() === text.toLowerCase());
-		if (type === undefined) {
-			return invalid(
-				ALLOWED_OPERATIONS,
-				`has a line that isn't an operation type (line ${number})`,
-				HOW_TO_WRITE_OPERATIONS,
-			);
-		}
-		if (!allowedOperations.includes(type)) {
-			allowedOperations.push(type);
-		}
+	const allowedOperations = readAllowedOperations(credential?.allowedOperations);
+	if (!Array.isArray(allowedOperations)) {
+		return { invalid: allowedOperations };
 	}
 	if (allowedOperations.length > 0) {
 		policy.allowedOperations = allowedOperations;
 	}
 
 	return { policy };
+}
+
+// The operation types of the list, with the SDK's spelling and without repeats.
+function readAllowedOperations(value: unknown): string[] | PolicyProblem {
+	const field = LABELS.allowedOperations;
+	const lines = linesOf(value);
+	if (lines === undefined) {
+		return { field, problem: 'is not text', fix: HOW_TO_WRITE_OPERATIONS };
+	}
+	const types: string[] = [];
+	for (const { text, lineNumber } of lines) {
+		const type = OPERATION_TYPES.find((name) => name.toLowerCase() === text.toLowerCase());
+		if (type === undefined) {
+			return {
+				field,
+				problem: `has a line that isn't an operation type (line ${lineNumber})`,
+				fix: HOW_TO_WRITE_OPERATIONS,
+			};
+		}
+		if (!types.includes(type)) {
+			types.push(type);
+		}
+	}
+	return types;
 }
 
 // What a transaction has that the policy doesn't allow.
@@ -108,22 +124,19 @@ export function checkPolicy(policy: Policy, transaction: Transaction): PolicyVio
 		const index = transaction.operations.findIndex(({ type }) => !allowedOperations.includes(type));
 		if (index !== -1) {
 			const { type } = transaction.operations[index];
+			const field = LABELS.allowedOperations;
 			return {
-				message: `'${ALLOWED_OPERATIONS}' doesn't include ${type}`,
-				description: `Operation ${index + 1} of the transaction is ${type}. '${ALLOWED_OPERATIONS}' in the Stellar Wallet API credential has ${allowedOperations.join(', ')}. This item was not signed. Build the transaction without that operation, or add ${type} to '${ALLOWED_OPERATIONS}'.`,
+				message: `'${field}' doesn't include ${type}`,
+				description: `Operation ${index + 1} of the transaction is ${type}. '${field}' in the Stellar Wallet API credential lists ${allowedOperations.join(', ')}. This item was not signed. Build the transaction without that operation, or add ${type} to '${field}'.`,
 			};
 		}
 	}
 	return undefined;
 }
 
-function invalid(field: string, problem: string, fix: string): PolicyReading {
-	return { invalid: { field, problem, fix } };
-}
-
 // The lines of a text field that have something, each with its number in the field. A field that
 // was never saved counts as empty. Undefined when the value isn't text.
-function linesOf(value: unknown): { text: string; number: number }[] | undefined {
+function linesOf(value: unknown): { text: string; lineNumber: number }[] | undefined {
 	if (value === undefined || value === null) {
 		return [];
 	}
@@ -133,6 +146,6 @@ function linesOf(value: unknown): { text: string; number: number }[] | undefined
 	// trim also removes the \r of a Windows line break.
 	return value
 		.split('\n')
-		.map((line, index) => ({ text: line.trim(), number: index + 1 }))
+		.map((line, index) => ({ text: line.trim(), lineNumber: index + 1 }))
 		.filter(({ text }) => text !== '');
 }

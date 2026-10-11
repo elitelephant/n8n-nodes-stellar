@@ -205,8 +205,8 @@ export class StellarSigner implements INodeType {
 					networkPassphrase,
 					itemIndex,
 				);
-				// The credential's policy is checked on the decoded transaction, before anything
-				// is signed or asked to the network.
+				// The credential's policy is checked on the decoded transaction, before it is
+				// signed and before any request to the network.
 				const violation = checkPolicy(policy, transaction);
 				if (violation !== undefined) {
 					throw new NodeOperationError(this.getNode(), violation.message, {
