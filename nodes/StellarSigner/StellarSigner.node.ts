@@ -93,7 +93,7 @@ export class StellarSigner implements INodeType {
 					},
 				},
 				description:
-					"The Horizon server to submit to, as an https address. Leave empty to use SDF's server for the network: horizon-testnet.stellar.org for testnet and horizon.stellar.org for public. Stellar's documentation no longer lists the public server, so enter your provider's address if it stops answering.",
+					"The Horizon server to submit to, as an https address. Plain http works only for localhost. Leave empty to use SDF's server for the network: horizon-testnet.stellar.org for testnet and horizon.stellar.org for public. Stellar's documentation no longer lists the public server, so enter your provider's address if it stops answering.",
 			},
 		],
 	};
@@ -238,8 +238,13 @@ function networkNameFrom(node: INode, value: unknown, itemIndex: number): Networ
 const ENTER_HORIZON_URL =
 	"Enter the address of a Horizon server, for example https://horizon-testnet.stellar.org, or leave the field empty to use SDF's server for the network.";
 
+// The hosts that are this same machine, as Stellar Lab lists them.
+const LOCAL_HOSTNAMES = ['localhost', '127.0.0.1', '[::1]'];
+
 // The Horizon client for the item's submission. A Horizon URL that can't be used fails the item
-// here. A value without text, such as an expression that gives nothing, counts as empty.
+// here. A value without text, such as an expression that gives nothing, counts as empty. The
+// address must be https. Plain http is accepted only for a server on this same machine, where
+// nobody can sit between the node and Horizon.
 function horizonServerFor(
 	node: INode,
 	networkName: NetworkName,
@@ -247,9 +252,9 @@ function horizonServerFor(
 	itemIndex: number,
 ): Horizon.Server {
 	const url = horizonUrlFor(networkName, String(horizonUrl ?? ''));
-	let protocol: string;
+	let parsed: URL;
 	try {
-		protocol = new URL(url).protocol;
+		parsed = new URL(url);
 	} catch (error) {
 		throw new NodeOperationError(node, error, {
 			itemIndex,
@@ -257,21 +262,16 @@ function horizonServerFor(
 			description: ENTER_HORIZON_URL,
 		});
 	}
-	try {
-		return new Horizon.Server(url);
-	} catch (error) {
-		// The SDK only connects over https. It has no other reason to refuse a URL today, but if it
-		// finds one, the error still names the field.
-		throw new NodeOperationError(node, error, {
+	const isLocalHttp = parsed.protocol === 'http:' && LOCAL_HOSTNAMES.includes(parsed.hostname);
+	if (parsed.protocol !== 'https:' && !isLocalHttp) {
+		throw new NodeOperationError(node, "'Horizon URL' must start with https://", {
 			itemIndex,
-			message:
-				protocol === 'https:'
-					? "'Horizon URL' can't be used"
-					: "'Horizon URL' must start with https://",
 			description:
-				"This node only submits to a Horizon server over https. Enter an https address, or leave the field empty to use SDF's server for the network.",
+				"This node submits to a Horizon server over https. Plain http is accepted only for localhost. Enter an https address, or leave the field empty to use SDF's server for the network.",
 		});
 	}
+	// The SDK accepts any scheme once allowHttp is on, so the scheme is checked above.
+	return new Horizon.Server(url, { allowHttp: isLocalHttp });
 }
 
 // The network isn't stored in the transaction XDR, so the item has to say which network its
