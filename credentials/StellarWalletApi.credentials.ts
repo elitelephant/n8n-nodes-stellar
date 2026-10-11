@@ -36,6 +36,18 @@ export class StellarWalletApi implements ICredentialType {
 				"The operation types this wallet may sign, one per line, such as payment or createAccount. Leave empty to sign any operation. A transaction with any other operation fails and isn't signed.",
 		},
 		{
+			displayName: 'Maximum Amounts',
+			name: 'maxAmounts',
+			type: 'string',
+			typeOptions: {
+				rows: 4,
+			},
+			default: '',
+			placeholder: 'e.g. XLM=100',
+			description:
+				'The highest amount of each asset that one operation may send, one per line, as XLM=100 or CODE:ISSUER=100. An asset without a line has no limit. Leave empty for no limits.',
+		},
+		{
 			displayName: 'Allow Message Signing',
 			name: 'allowMessageSigning',
 			type: 'boolean',

@@ -1,4 +1,9 @@
-import type { OperationType, Transaction } from '@stellar/stellar-sdk';
+import {
+	Asset,
+	type OperationRecord,
+	type OperationType,
+	type Transaction,
+} from '@stellar/stellar-sdk';
 
 // The signing policy: the limits that the Stellar Wallet API credential puts on what the node
 // signs. This module doesn't depend on n8n. It reads the credential's fields and checks a decoded
@@ -7,6 +12,7 @@ import type { OperationType, Transaction } from '@stellar/stellar-sdk';
 // The names of the policy fields on the credential screen, for the error texts.
 const LABELS = {
 	allowedOperations: 'Allowed Operations',
+	maxAmounts: 'Maximum Amounts',
 	allowMessageSigning: 'Allow Message Signing',
 };
 
@@ -49,13 +55,29 @@ const KNOWN_OPERATION_TYPES: Record<OperationType, true> = {
 };
 const OPERATION_TYPES = Object.keys(KNOWN_OPERATION_TYPES);
 
+// The operations that pay someone. They are the only ones the limits on amounts can be checked
+// against.
+const PAYMENT_TYPES = [
+	'payment',
+	'pathPaymentStrictSend',
+	'pathPaymentStrictReceive',
+	'createAccount',
+];
+
 const HOW_TO_WRITE_OPERATIONS =
 	"Write one operation type per line, with the names the Stellar SDK uses, such as payment, createAccount or pathPaymentStrictSend. The full list is in the credential's documentation.";
+const HOW_TO_WRITE_AMOUNTS =
+	'Write one limit per line, as the asset, an equals sign and the amount: XLM=100 for lumens, or CODE:ISSUER=100 for another asset, with up to 7 decimals.';
+
+const NOT_SIGNED = 'This item was not signed.';
 
 // What the credential lets the node sign. A limit that is undefined doesn't apply.
 export interface Policy {
 	// Operation types, as the SDK names them.
 	allowedOperations?: string[];
+	// The most that one operation may send of each asset, in stroops. The key is the asset as the
+	// policy writes it: XLM or CODE:ISSUER.
+	maxAmounts?: Map<string, bigint>;
 	// Signing messages is off unless the credential turns it on.
 	allowMessageSigning: boolean;
 }
@@ -97,6 +119,14 @@ export function readPolicy(credential: Record<string, unknown> | undefined): Pol
 		policy.allowedOperations = allowedOperations;
 	}
 
+	const maxAmounts = readMaxAmounts(credential?.maxAmounts);
+	if (!(maxAmounts instanceof Map)) {
+		return { invalid: maxAmounts };
+	}
+	if (maxAmounts.size > 0) {
+		policy.maxAmounts = maxAmounts;
+	}
+
 	return { policy };
 }
 
@@ -124,6 +154,38 @@ function readAllowedOperations(value: unknown): string[] | PolicyProblem {
 	return types;
 }
 
+// The limit of each asset, from lines such as XLM=100. An asset on two lines is a mistake: the
+// node can't tell which limit was meant.
+function readMaxAmounts(value: unknown): Map<string, bigint> | PolicyProblem {
+	const field = LABELS.maxAmounts;
+	const lines = linesOf(value);
+	if (lines === undefined) {
+		return { field, problem: 'is not text', fix: HOW_TO_WRITE_AMOUNTS };
+	}
+	const limits = new Map<string, bigint>();
+	for (const { text, lineNumber } of lines) {
+		const parts = text.split('=');
+		const asset = parts.length === 2 ? readAsset(parts[0].trim()) : undefined;
+		const limit = parts.length === 2 ? readAmount(parts[1].trim()) : undefined;
+		if (asset === undefined || limit === undefined) {
+			return {
+				field,
+				problem: `has a line that isn't an asset and an amount (line ${lineNumber})`,
+				fix: HOW_TO_WRITE_AMOUNTS,
+			};
+		}
+		if (limits.has(asset)) {
+			return {
+				field,
+				problem: `has the same asset on two lines (line ${lineNumber})`,
+				fix: HOW_TO_WRITE_AMOUNTS,
+			};
+		}
+		limits.set(asset, limit);
+	}
+	return limits;
+}
+
 // What a transaction has that the policy doesn't allow.
 export interface PolicyViolation {
 	message: string;
@@ -133,19 +195,93 @@ export interface PolicyViolation {
 // Returns the first thing in the transaction that the policy doesn't allow. It checks every
 // operation, whatever its source account: a signature counts for the whole transaction.
 export function checkPolicy(policy: Policy, transaction: Transaction): PolicyViolation | undefined {
-	const { allowedOperations } = policy;
-	if (allowedOperations !== undefined) {
-		const index = transaction.operations.findIndex(({ type }) => !allowedOperations.includes(type));
-		if (index !== -1) {
-			const { type } = transaction.operations[index];
-			const field = LABELS.allowedOperations;
-			return {
-				message: `'${field}' doesn't include ${type}`,
-				description: `Operation ${index + 1} of the transaction is ${type}. '${field}' in the Stellar Wallet API credential lists ${allowedOperations.join(', ')}. This item was not signed. Build the transaction without that operation, or add ${type} to '${field}'.`,
-			};
+	for (let index = 0; index < transaction.operations.length; index++) {
+		const violation = checkOperation(policy, transaction.operations[index], index + 1);
+		if (violation !== undefined) {
+			return violation;
 		}
 	}
 	return undefined;
+}
+
+// Operations are counted from 1 in the error texts.
+function checkOperation(
+	policy: Policy,
+	operation: OperationRecord,
+	number: number,
+): PolicyViolation | undefined {
+	const { type } = operation;
+	const credential = 'in the Stellar Wallet API credential';
+
+	const { allowedOperations } = policy;
+	if (allowedOperations !== undefined) {
+		if (!allowedOperations.includes(type)) {
+			const field = LABELS.allowedOperations;
+			return {
+				message: `'${field}' doesn't include ${type}`,
+				description: `Operation ${number} of the transaction is ${type}. '${field}' ${credential} lists ${allowedOperations.join(', ')}. ${NOT_SIGNED} Build the transaction without that operation, or add ${type} to '${field}'.`,
+			};
+		}
+	} else if (limitsPayments(policy) && !PAYMENT_TYPES.includes(type)) {
+		// What can't be checked against the limits isn't signed, unless the credential names it.
+		return {
+			message: `This credential signs only payments, and operation ${number} is ${type}`,
+			description: `The Stellar Wallet API credential has limits on amounts, destinations or assets, and only ${listOf(PAYMENT_TYPES)} operations can be checked against them. ${NOT_SIGNED} To sign ${type} with this credential, list it in '${LABELS.allowedOperations}' together with the payment types it should sign.`,
+		};
+	}
+
+	const outflow = outflowOf(operation);
+	if (outflow === undefined) {
+		return undefined;
+	}
+
+	const asset = assetKey(outflow.asset);
+	const limit = policy.maxAmounts?.get(asset);
+	if (limit !== undefined) {
+		// An amount that can't be read counts as over the limit.
+		const sent = readAmount(outflow.amount);
+		if (sent === undefined || sent > limit) {
+			const field = LABELS.maxAmounts;
+			const code = outflow.asset.isNative() ? 'XLM' : outflow.asset.getCode();
+			const sends = outflow.isCeiling ? 'may send up to' : 'sends';
+			const amount = sent === undefined ? outflow.amount : writeAmount(sent);
+			return {
+				message: `'${field}' allows up to ${writeAmount(limit)} ${code} per operation`,
+				description: `Operation ${number} of the transaction (${type}) ${sends} ${amount} ${asset}. '${field}' ${credential} allows up to ${writeAmount(limit)} ${asset} per operation. ${NOT_SIGNED} Lower the amount, or raise the limit in the credential.`,
+			};
+		}
+	}
+
+	return undefined;
+}
+
+// Whether the policy has a limit that only payment operations can be checked against.
+function limitsPayments(policy: Policy): boolean {
+	return policy.maxAmounts !== undefined;
+}
+
+// What a payment operation takes out of the account.
+interface Outflow {
+	// As the SDK gives it: a decimal with 7 digits.
+	amount: string;
+	asset: Asset;
+	// True when the amount is the most the operation may send, not exactly what it sends.
+	isCeiling: boolean;
+}
+
+function outflowOf(operation: OperationRecord): Outflow | undefined {
+	switch (operation.type) {
+		case 'payment':
+			return { amount: operation.amount, asset: operation.asset, isCeiling: false };
+		case 'pathPaymentStrictSend':
+			return { amount: operation.sendAmount, asset: operation.sendAsset, isCeiling: false };
+		case 'pathPaymentStrictReceive':
+			return { amount: operation.sendMax, asset: operation.sendAsset, isCeiling: true };
+		case 'createAccount':
+			return { amount: operation.startingBalance, asset: Asset.native(), isCeiling: false };
+		default:
+			return undefined;
+	}
 }
 
 // Says why the credential doesn't let the node sign a message, or nothing if it does.
@@ -156,8 +292,58 @@ export function checkMessageSigning(policy: Policy): PolicyViolation | undefined
 	const field = LABELS.allowMessageSigning;
 	return {
 		message: `'${field}' is off in the Stellar Wallet API credential`,
-		description: `Sign Message signs any text it receives with this wallet's key, and a signed text can prove control of the account to another service. Turn on '${field}' in the credential only if this workflow should do that. This item was not signed.`,
+		description: `Sign Message signs any text it receives with this wallet's key, and a signed text can prove control of the account to another service. Turn on '${field}' in the credential only if this workflow should do that. ${NOT_SIGNED}`,
 	};
+}
+
+// An asset as the policy writes it: XLM for the native asset and CODE:ISSUER for any other. An
+// issued asset whose code is XLM is not the native one.
+function assetKey(asset: Asset): string {
+	return asset.isNative() ? 'XLM' : `${asset.getCode()}:${asset.getIssuer()}`;
+}
+
+// Reads XLM or CODE:ISSUER. The SDK decides which codes and issuers are valid. Undefined if the
+// text is neither.
+function readAsset(text: string): string | undefined {
+	if (text.toUpperCase() === 'XLM') {
+		return 'XLM';
+	}
+	const parts = text.split(':');
+	if (parts.length !== 2) {
+		return undefined;
+	}
+	try {
+		return assetKey(new Asset(parts[0], parts[1]));
+	} catch {
+		return undefined;
+	}
+}
+
+// Stellar amounts have 7 decimals and fit in 64 bits as stroops. They are handled as whole
+// stroops, never as JS numbers, which lose digits.
+const STROOPS_PER_UNIT = BigInt(10000000);
+const MAX_STROOPS = BigInt('9223372036854775807');
+
+// Reads an amount such as 100 or 50.5 as stroops. Undefined if the text isn't an amount.
+function readAmount(text: string): bigint | undefined {
+	const match = /^(\d+)(?:\.(\d{1,7}))?$/.exec(text);
+	if (match === null) {
+		return undefined;
+	}
+	const stroops = BigInt(match[1]) * STROOPS_PER_UNIT + BigInt((match[2] ?? '').padEnd(7, '0'));
+	return stroops > MAX_STROOPS ? undefined : stroops;
+}
+
+// Writes stroops as an amount without trailing zeros: 100, 50.5.
+function writeAmount(stroops: bigint): string {
+	const decimals = (stroops % STROOPS_PER_UNIT).toString().padStart(7, '0').replace(/0+$/, '');
+	const units = (stroops / STROOPS_PER_UNIT).toString();
+	return decimals === '' ? units : `${units}.${decimals}`;
+}
+
+// "a, b, c and d".
+function listOf(names: string[]): string {
+	return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
 // The lines of a text field that have something, each with its number in the field. A field that
