@@ -12,7 +12,15 @@ import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import { type Horizon, Keypair, Transaction, xdr } from '@stellar/stellar-sdk';
 
 import { isNetworkName, NETWORK_PASSPHRASES, type NetworkName } from '../shared/network';
-import { checkMemoRequired, horizonServerFor, submitTransaction } from './submission';
+import {
+	addAppliedTransactions,
+	type AppliedTransaction,
+	checkMemoRequired,
+	horizonServerFor,
+	sameTransactionFailure,
+	type SubmissionResult,
+	submitTransaction,
+} from './submission';
 
 const ENTER_SECRET_KEY = "Enter the account's secret key: 56 characters, starting with S.";
 const ENTER_TRANSACTION_XDR = 'Enter the base64 XDR of the transaction to sign.';
@@ -130,6 +138,10 @@ export class StellarSigner implements INodeType {
 		}
 
 		const returnData: INodeExecutionData[] = [];
+		// With Submit to Horizon on: the transactions Horizon applied in this run, and the item that
+		// first sent each transaction.
+		const applied: AppliedTransaction[] = [];
+		const firstItemWith = new Map<string, number>();
 
 		for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
 			try {
@@ -199,7 +211,16 @@ export class StellarSigner implements INodeType {
 				// No retries: a transaction that Horizon doesn't confirm fails the item, and the error
 				// says whether it was rejected, not submitted, or may still be applied.
 				if (horizon !== undefined) {
-					const result = await submitTransaction(horizon, transaction, txHash);
+					// A transaction is applied only once, so a second item with the same one isn't
+					// sent: Horizon would answer it with the first item's result.
+					const firstItem = firstItemWith.get(txHash);
+					let result: SubmissionResult;
+					if (firstItem === undefined) {
+						firstItemWith.set(txHash, itemIndex);
+						result = await submitTransaction(horizon, transaction, txHash);
+					} else {
+						result = { failure: sameTransactionFailure(firstItem, txHash) };
+					}
 					if ('failure' in result) {
 						const { failure } = result;
 						if (this.continueOnFail()) {
@@ -231,6 +252,7 @@ export class StellarSigner implements INodeType {
 					}
 					newItem.json.submitted = true;
 					newItem.json.ledger = result.ledger;
+					applied.push({ itemIndex, txHash, ledger: result.ledger });
 				}
 
 				returnData.push(newItem);
@@ -244,6 +266,11 @@ export class StellarSigner implements INodeType {
 						pairedItem: itemIndex,
 					});
 				} else {
+					// n8n drops the output of the items before this one, so the error keeps the
+					// transactions that were already applied.
+					if (applied.length > 0) {
+						addAppliedTransactions(nodeError, applied);
+					}
 					throw nodeError;
 				}
 			}

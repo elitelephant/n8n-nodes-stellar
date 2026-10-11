@@ -200,6 +200,39 @@ function failureFrom(error: unknown, transaction: Transaction, txHash: string): 
 	);
 }
 
+// A second item of the run with a transaction that an earlier item already sent.
+export function sameTransactionFailure(firstItemIndex: number, txHash: string): SubmissionFailure {
+	return {
+		outcome: 'not_submitted',
+		message: `This item has the same transaction as item ${firstItemIndex}`,
+		description: `Transaction ${txHash} can be applied only once, so it pays once. Build a separate transaction for each payment.`,
+	};
+}
+
+export interface AppliedTransaction {
+	itemIndex: number;
+	txHash: string;
+	ledger: number;
+}
+
+// When an error stops the run, n8n drops the output of the items before it, but their
+// transactions were applied. The error says how many and lists them, so nobody runs the workflow
+// again from the start and pays them twice. n8n shows context.data as "Error data".
+export function addAppliedTransactions(
+	error: NodeOperationError,
+	applied: AppliedTransaction[],
+): void {
+	const count =
+		applied.length === 1
+			? '1 earlier transaction in this run was applied'
+			: `${applied.length} earlier transactions in this run were applied`;
+	const list = applied.map(({ itemIndex, txHash }) => `item ${itemIndex} ${txHash}`).join(', ');
+	error.message = `${error.message} (${count})`;
+	error.description =
+		`${error.description ?? ''} Already applied in this run, don't send them again: ${list}. Items after this one were not processed. Don't run the workflow from the start: that builds new transactions and pays the applied ones again.`.trim();
+	error.context.data = { appliedTransactions: applied.map((transaction) => ({ ...transaction })) };
+}
+
 // Nobody said whether the transaction was applied. fromHorizon is false when the answer doesn't
 // look like Horizon's, which usually means a wrong Horizon URL.
 function uncertain(
