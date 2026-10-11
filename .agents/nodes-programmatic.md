@@ -71,6 +71,10 @@ async execute(
   operational/validation errors)
 - Support `continueOnFail()` to allow workflows to proceed when possible. The failed item keeps its
   input's data, plus its error and its `pairedItem`, as the Stellar Signer does
+- n8n replaces the `json` of an item that has the `error` property with the error's message. To give
+  a failed item fields of its own, as the Stellar Signer does for an item that fails after it was
+  signed, return it without that property, with `error` as the only key of its `json` and
+  `pairedItem` as an object (`{ item: i }`)
 - The Stellar Signer calls the network only when **Submit to Horizon** is on, through the SDK's
   Horizon client. When a node needs the Stellar network, use that client instead of
   `this.helpers.httpRequest`

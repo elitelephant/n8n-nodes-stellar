@@ -106,6 +106,11 @@ actual node.
     fields above
   - the output fields `submitted` (`true`) and `ledger`, which the node adds when `submit` is on and
     Horizon confirms the transaction
+  - the `error` object of an item that fails after it was signed, when the node continues on fail:
+    `message`, `description`, `outcome` (`rejected`, `not_submitted` or `uncertain`), `txHash` and
+    `signedXdr`. An item that fails before it is signed keeps n8n's usual shape
+  - `appliedTransactions` in the data of an error that stops a run after Horizon applied
+    transactions of earlier items: `itemIndex`, `txHash` and `ledger` for each one
 - The Stellar SDK is `@stellar/stellar-sdk`, pinned to `17.1.0` as a runtime dependency. The
   transaction hash is hex: `Buffer.from(transaction.hash()).toString('hex')`.
 - The network names, their passphrases and SDF's Horizon server for each one are in

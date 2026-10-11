@@ -75,12 +75,67 @@ your provider's address in **Horizon URL**. Each output item also has:
 | `submitted` | `true`: Horizon confirmed the transaction.              |
 | `ledger`    | The number of the ledger that included the transaction. |
 
-Before it submits a payment that has no memo, the node asks that Horizon server whether the
+Before it signs a payment that has no memo, the node asks that Horizon server whether the
 destination account requires one
-([SEP-29](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0029.md)).
+([SEP-29](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0029.md)). If it
+does, or if Horizon doesn't answer, the item fails and nothing is signed or sent. Error messages
+count a transaction's operations from 1.
 
-If Horizon doesn't confirm the transaction, the item fails. The transaction may still have reached
-the network, so check the account's transactions before you send it again.
+### When Horizon doesn't confirm a transaction
+
+The node submits once. If Horizon doesn't confirm the transaction, the item fails, and the error
+says which of these happened:
+
+| Outcome         | What happened                                                                                                             | What to do                                                |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `rejected`      | Horizon answered with result codes, such as `tx_failed` and `op_underfunded`.                                             | Fix what the codes say and build a new transaction.       |
+| `not_submitted` | Horizon answered before it passed the transaction to the network, for example with a rate limit.                          | Send the same signed transaction again.                   |
+| `uncertain`     | Nobody said whether the transaction was applied: Horizon timed out, the connection failed or the answer wasn't Horizon's. | Look the transaction up by its hash before anything else. |
+
+An uncertain result doesn't mean the transaction failed. The network can still apply it until the
+time limit it was built with, and the error gives that time. Look it up by its hash, for example at
+`<Horizon URL>/transactions/<txHash>`.
+
+Sending the same signed transaction again is safe, because the network applies a transaction only
+once. Running this node again with the same unsigned transaction does that: it signs it into the
+same signed transaction. What can pay twice is a **new** transaction for the same payment, which has
+another hash. Don't build one until you know that the first wasn't applied.
+
+Two result codes need that check too. Horizon can answer `tx_bad_seq` or `tx_too_late` to a
+transaction that was sent before and applied, so the error for those says to look the transaction up
+first.
+
+Leave n8n's **Retry On Fail** setting off on this node while **Submit to Horizon** is on. A retry
+runs the node again for all its items, and it can turn an uncertain result into a `tx_bad_seq`
+rejection although the first attempt was applied.
+
+With the node's **On Error** setting on one of the **Continue** options, an item that fails after it
+was signed has an `error` object with what you need to follow it up:
+
+| Field               | Description                                 |
+| ------------------- | ------------------------------------------- |
+| `error.message`     | What happened.                              |
+| `error.description` | What to do next.                            |
+| `error.outcome`     | `rejected`, `not_submitted` or `uncertain`. |
+| `error.txHash`      | The transaction hash, to look it up.        |
+| `error.signedXdr`   | The signed transaction, to send it again.   |
+
+With **Continue (using error output)**, that item also keeps the fields of its input item. An item
+that fails before it is signed, for example for a wrong `networkName`, has `error` as a text with
+the message, as in other n8n nodes.
+
+### Several payments in one run
+
+Each item is one transaction, and the node submits them one at a time, in order.
+
+- With **On Error** on **Stop Workflow**, which is n8n's default, the first item that fails stops
+  the run and n8n discards the output of the items before it, although their transactions were
+  applied. The error says how many were applied and lists their hashes. Don't run the workflow again
+  from the start after that: it would build new transactions and pay the applied ones a second time.
+- To keep each item's result, set **On Error** to **Continue (using error output)**, or put the node
+  inside a **Loop Over Items** node so it handles one item per run.
+- An item with the same transaction as an earlier item of the run fails and isn't sent: a
+  transaction is applied only once, so it pays once. Build a separate transaction for each payment.
 
 ## Credentials
 
