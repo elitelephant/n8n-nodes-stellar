@@ -9,14 +9,10 @@ import type {
 	INodeTypeDescription,
 } from 'n8n-workflow';
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
-import { Horizon, Keypair, Transaction, xdr } from '@stellar/stellar-sdk';
+import { type Horizon, Keypair, Transaction, xdr } from '@stellar/stellar-sdk';
 
-import {
-	horizonUrlFor,
-	isNetworkName,
-	NETWORK_PASSPHRASES,
-	type NetworkName,
-} from '../shared/network';
+import { isNetworkName, NETWORK_PASSPHRASES, type NetworkName } from '../shared/network';
+import { checkMemoRequired, horizonServerFor } from './submission';
 
 const ENTER_SECRET_KEY = "Enter the account's secret key: 56 characters, starting with S.";
 const ENTER_TRANSACTION_XDR = 'Enter the base64 XDR of the transaction to sign.';
@@ -176,6 +172,10 @@ export class StellarSigner implements INodeType {
 					networkPassphrase,
 					itemIndex,
 				);
+				// The last check before signing, and the only one that needs the network.
+				if (horizon !== undefined) {
+					await checkMemoRequired(this.getNode(), horizon, transaction, itemIndex);
+				}
 				transaction.sign(keypair);
 
 				const txHash = Buffer.from(transaction.hash()).toString('hex');
@@ -198,7 +198,9 @@ export class StellarSigner implements INodeType {
 
 				// No retries: a transaction that Horizon doesn't confirm fails the item.
 				if (horizon !== undefined) {
-					const response = await horizon.submitTransaction(transaction);
+					const response = await horizon.submitTransaction(transaction, {
+						skipMemoRequiredCheck: true,
+					});
 					newItem.json.submitted = true;
 					newItem.json.ledger = response.ledger;
 				}
@@ -233,45 +235,6 @@ function networkNameFrom(node: INode, value: unknown, itemIndex: number): Networ
 		itemIndex,
 		description: 'Choose public or testnet in the Network parameter.',
 	});
-}
-
-const ENTER_HORIZON_URL =
-	"Enter the address of a Horizon server, for example https://horizon-testnet.stellar.org, or leave the field empty to use SDF's server for the network.";
-
-// The hosts that are this same machine, as Stellar Lab lists them.
-const LOCAL_HOSTNAMES = ['localhost', '127.0.0.1', '[::1]'];
-
-// The Horizon client for the item's submission. A Horizon URL that can't be used fails the item
-// here. A value without text, such as an expression that gives nothing, counts as empty. The
-// address must be https. Plain http is accepted only for a server on this same machine, where
-// nobody can sit between the node and Horizon.
-function horizonServerFor(
-	node: INode,
-	networkName: NetworkName,
-	horizonUrl: unknown,
-	itemIndex: number,
-): Horizon.Server {
-	const url = horizonUrlFor(networkName, String(horizonUrl ?? ''));
-	let parsed: URL;
-	try {
-		parsed = new URL(url);
-	} catch (error) {
-		throw new NodeOperationError(node, error, {
-			itemIndex,
-			message: "'Horizon URL' isn't a valid URL",
-			description: ENTER_HORIZON_URL,
-		});
-	}
-	const isLocalHttp = parsed.protocol === 'http:' && LOCAL_HOSTNAMES.includes(parsed.hostname);
-	if (parsed.protocol !== 'https:' && !isLocalHttp) {
-		throw new NodeOperationError(node, "'Horizon URL' must start with https://", {
-			itemIndex,
-			description:
-				"This node submits to a Horizon server over https. Plain http is accepted only for localhost. Enter an https address, or leave the field empty to use SDF's server for the network.",
-		});
-	}
-	// The SDK accepts any scheme once allowHttp is on, so the scheme is checked above.
-	return new Horizon.Server(url, { allowHttp: isLocalHttp });
 }
 
 // The network isn't stored in the transaction XDR, so the item has to say which network its
