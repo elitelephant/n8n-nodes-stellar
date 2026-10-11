@@ -212,7 +212,7 @@ export class StellarSigner implements INodeType {
 				// says whether it was rejected, not submitted, or may still be applied.
 				if (horizon !== undefined) {
 					// A transaction is applied only once, so a second item with the same one isn't
-					// sent: Horizon would answer it with the first item's result.
+					// sent: it couldn't pay again.
 					const firstItem = firstItemWith.get(txHash);
 					let result: SubmissionResult;
 					if (firstItem === undefined) {

@@ -70,7 +70,8 @@ async execute(
 - Handle errors using `NodeApiError` (for API failures) and `NodeOperationError` (for
   operational/validation errors)
 - Support `continueOnFail()` to allow workflows to proceed when possible. The failed item keeps its
-  input's data, plus its error and its `pairedItem`, as the Stellar Signer does
+  input's data, plus its error and its `pairedItem`, as the Stellar Signer does for an item that
+  fails before it is signed
 - n8n replaces the `json` of an item that has the `error` property with the error's message. To give
   a failed item fields of its own, as the Stellar Signer does for an item that fails after it was
   signed, return it without that property, with `error` as the only key of its `json` and

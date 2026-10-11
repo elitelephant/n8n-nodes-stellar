@@ -80,12 +80,17 @@ export async function checkMemoRequired(
 			});
 		}
 		const host = horizon.serverURL.host;
+		// For an answer with an error, the SDK's error carries the body and its message is the
+		// server's own reason phrase. Horizon's body has the status, which is named here.
+		const body = error instanceof NetworkError ? error.getResponse() : undefined;
+		const status =
+			isRecord(body) && typeof body.status === 'number' ? ` (${statusText(body.status)})` : '';
 		throw new NodeOperationError(node, error, {
 			itemIndex,
 			message: "Couldn't check whether the destination requires a memo",
 			description:
 				error instanceof NetworkError
-					? `Horizon at ${host} answered with an error: ${error.message}. This item was not signed or sent. Wait and run it again.`
+					? `Horizon at ${host} answered with an error${status}. This item was not signed or sent. Wait and run it again.`
 					: `Horizon at ${host} didn't answer. This item was not signed or sent. Check 'Horizon URL' and the connection, then run it again.`,
 		});
 	}
@@ -93,8 +98,8 @@ export async function checkMemoRequired(
 
 // What a submission that Horizon didn't confirm means for the transaction.
 // - rejected: Horizon answered with result codes.
-// - not_submitted: Horizon answered before passing it to the network.
-// - uncertain: nobody gave a verdict, so the transaction may still be applied.
+// - not_submitted: Horizon answered before passing it to the network, or the node didn't send it.
+// - uncertain: Horizon gave no verdict, so the transaction may still be applied.
 export type SubmissionOutcome = 'rejected' | 'not_submitted' | 'uncertain';
 
 export interface SubmissionFailure {
@@ -131,7 +136,7 @@ export async function submitTransaction(
 		return { ledger: response.ledger as number };
 	}
 	return {
-		failure: uncertain(transaction, txHash, "the answer isn't a Horizon result for it", false),
+		failure: uncertain(transaction, txHash, "the answer isn't a Horizon result for it", true),
 	};
 }
 
@@ -140,8 +145,10 @@ export async function submitTransaction(
 const REJECTIONS_TO_DOUBLE_CHECK: Record<string, (transaction: Transaction) => string> = {
 	tx_bad_seq: () =>
 		"Its sequence number doesn't match the source account. If this same transaction was sent before, it may already be applied: look it up on Horizon by its hash before you build a new one. If it was never sent, another transaction used that number: build a new one.",
-	tx_too_late: (transaction) =>
-		`It expired${expiryOf(transaction) === undefined ? '' : ` at ${expiryOf(transaction)}`}. If it was sent before that time, check that it wasn't applied: look it up on Horizon by its hash. If it isn't there, build a new transaction.`,
+	tx_too_late: (transaction) => {
+		const expiry = expiryOf(transaction);
+		return `It expired${expiry === undefined ? '' : ` at ${expiry}`}. If it was sent before that time, check that it wasn't applied: look it up on Horizon by its hash. If it isn't there, build a new transaction.`;
+	},
 };
 
 function failureFrom(error: unknown, transaction: Transaction, txHash: string): SubmissionFailure {
@@ -152,7 +159,9 @@ function failureFrom(error: unknown, transaction: Transaction, txHash: string): 
 	if (error instanceof TransactionFailedError && status === 400) {
 		const codes = error.getResultCodes();
 		if (typeof codes.transaction === 'string') {
-			const operations = (codes.operations ?? []).filter((code) => typeof code === 'string');
+			const operations = Array.isArray(codes.operations)
+				? codes.operations.filter((code) => typeof code === 'string')
+				: [];
 			const describe = REJECTIONS_TO_DOUBLE_CHECK[codes.transaction];
 			return {
 				outcome: 'rejected',
@@ -167,26 +176,32 @@ function failureFrom(error: unknown, transaction: Transaction, txHash: string): 
 	}
 
 	if (status === undefined) {
-		// The SDK's client reports its time limit with this code. Anything else is a connection
-		// that failed, before or after Horizon received the transaction: the SDK can't tell.
-		const timedOut = isRecord(error) && error.code === 'ECONNABORTED';
+		// Anything but the time limit is a connection that failed, before or after Horizon received
+		// the transaction: the SDK can't tell.
 		return uncertain(
 			transaction,
 			txHash,
-			timedOut ? `no answer in ${REQUEST_TIMEOUT_MS / 1000} seconds` : 'the connection failed',
-			true,
+			isTimeout(error)
+				? `no answer in ${REQUEST_TIMEOUT_MS / 1000} seconds`
+				: 'the connection failed',
+			false,
 			error,
 		);
 	}
 
 	// Horizon's own 4xx answers come before it passes the transaction to the network. The
-	// exception is 499, which it writes after that when the client disconnects.
+	// exception is 499, which it writes after that when the client disconnects. A rate limit
+	// passes by waiting. The others come back until their cause is fixed.
 	const problem = horizonProblemTitle(response?.data, status);
 	if (status >= 400 && status < 500 && status !== 499 && problem !== undefined) {
+		const next =
+			status === 429
+				? 'Wait and send this same signed transaction again: that is safe.'
+				: "Sending this same signed transaction again is safe, but Horizon will answer the same until the cause is fixed: check 'Horizon URL' and the transaction.";
 		return {
 			outcome: 'not_submitted',
 			message: `Horizon didn't accept transaction ${txHash}: ${statusText(status)}`,
-			description: `Horizon answered "${problem}" before passing it to the network, so it was not submitted. Sending this same signed transaction again is safe.`,
+			description: `Horizon answered "${problem}" before passing it to the network, so it was not submitted. ${next}`,
 			cause: error,
 		};
 	}
@@ -195,8 +210,19 @@ function failureFrom(error: unknown, transaction: Transaction, txHash: string): 
 		transaction,
 		txHash,
 		`the server answered ${statusText(status)}`,
-		problem !== undefined,
+		problem === undefined,
 		error,
+	);
+}
+
+// The SDK's client reports its time limit in one of three ways, depending on where the wait ended
+// and on which of its two adapters handled the request.
+function isTimeout(error: unknown): boolean {
+	return (
+		isRecord(error) &&
+		(error.code === 'ECONNABORTED' ||
+			error.name === 'TimeoutError' ||
+			(typeof error.message === 'string' && /^timeout of \d+ms exceeded$/.test(error.message)))
 	);
 }
 
@@ -233,13 +259,13 @@ export function addAppliedTransactions(
 	error.context.data = { appliedTransactions: applied.map((transaction) => ({ ...transaction })) };
 }
 
-// Nobody said whether the transaction was applied. fromHorizon is false when the answer doesn't
-// look like Horizon's, which usually means a wrong Horizon URL.
+// Horizon didn't say whether the transaction was applied. foreignAnswer is true when an answer
+// came and it doesn't look like Horizon's, which usually means a wrong Horizon URL.
 function uncertain(
 	transaction: Transaction,
 	txHash: string,
 	reason: string,
-	fromHorizon: boolean,
+	foreignAnswer: boolean,
 	cause?: unknown,
 ): SubmissionFailure {
 	const expiry = expiryOf(transaction);
@@ -250,7 +276,7 @@ function uncertain(
 	return {
 		outcome: 'uncertain',
 		message: `The result of transaction ${txHash} is uncertain: ${reason}`,
-		description: `${fromHorizon ? '' : "The answer doesn't look like Horizon's: check 'Horizon URL'. "}${until} Sending this same signed transaction again is safe: it can be applied only once. Don't build a new one for this payment until you know.`,
+		description: `${foreignAnswer ? "The answer doesn't look like Horizon's: check 'Horizon URL'. " : ''}${until} Sending this same signed transaction again is safe: it can be applied only once. Don't build a new one for this payment until you know.`,
 		cause,
 	};
 }
@@ -279,6 +305,10 @@ function horizonProblemTitle(body: unknown, status: number): string | undefined 
 
 // The status with its usual name. The server's own reason phrase isn't used: it can be anything.
 const STATUS_NAMES: Record<number, string> = {
+	301: 'Moved Permanently',
+	302: 'Found',
+	307: 'Temporary Redirect',
+	308: 'Permanent Redirect',
 	400: 'Bad Request',
 	403: 'Forbidden',
 	404: 'Not Found',
