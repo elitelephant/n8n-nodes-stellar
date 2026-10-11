@@ -1,7 +1,9 @@
 import {
 	Asset,
+	extractBaseAddress,
 	type OperationRecord,
 	type OperationType,
+	StrKey,
 	type Transaction,
 } from '@stellar/stellar-sdk';
 
@@ -14,6 +16,7 @@ const LABELS = {
 	allowedOperations: 'Allowed Operations',
 	maxAmounts: 'Maximum Amounts',
 	allowedAssets: 'Allowed Assets',
+	allowedDestinations: 'Allowed Destinations',
 	allowMessageSigning: 'Allow Message Signing',
 };
 
@@ -71,6 +74,8 @@ const HOW_TO_WRITE_AMOUNTS =
 	'Write one limit per line, as the asset, an equals sign and the amount: XLM=100 for lumens, or CODE:ISSUER=100 for another asset, with up to 7 decimals.';
 const HOW_TO_WRITE_ASSETS =
 	'Write one asset per line: XLM for lumens, or CODE:ISSUER for another asset, with its code and the address of the account that issues it.';
+const HOW_TO_WRITE_DESTINATIONS =
+	'Write one account address per line: 56 characters starting with G, or a muxed address of 69 characters starting with M.';
 
 const NOT_SIGNED = 'This item was not signed.';
 
@@ -83,6 +88,8 @@ export interface Policy {
 	maxAmounts?: Map<string, bigint>;
 	// The assets a payment may use, written the same way.
 	allowedAssets?: string[];
+	// The addresses a payment may go to: G accounts and muxed (M) addresses.
+	allowedDestinations?: string[];
 	// Signing messages is off unless the credential turns it on.
 	allowMessageSigning: boolean;
 }
@@ -138,6 +145,14 @@ export function readPolicy(credential: Record<string, unknown> | undefined): Pol
 	}
 	if (allowedAssets.length > 0) {
 		policy.allowedAssets = allowedAssets;
+	}
+
+	const allowedDestinations = readAllowedDestinations(credential?.allowedDestinations);
+	if (!Array.isArray(allowedDestinations)) {
+		return { invalid: allowedDestinations };
+	}
+	if (allowedDestinations.length > 0) {
+		policy.allowedDestinations = allowedDestinations;
 	}
 
 	return { policy };
@@ -221,6 +236,27 @@ function readAllowedAssets(value: unknown): string[] | PolicyProblem {
 	return assets;
 }
 
+// The addresses of the list. The SDK decides which addresses are valid.
+function readAllowedDestinations(value: unknown): string[] | PolicyProblem {
+	const field = LABELS.allowedDestinations;
+	const lines = linesOf(value);
+	if (lines === undefined) {
+		return { field, problem: 'is not text', fix: HOW_TO_WRITE_DESTINATIONS };
+	}
+	const addresses: string[] = [];
+	for (const { text, lineNumber } of lines) {
+		if (!StrKey.isValidEd25519PublicKey(text) && !StrKey.isValidMed25519PublicKey(text)) {
+			return {
+				field,
+				problem: `has a line that isn't a Stellar address (line ${lineNumber})`,
+				fix: HOW_TO_WRITE_DESTINATIONS,
+			};
+		}
+		addresses.push(text);
+	}
+	return addresses;
+}
+
 // What a transaction has that the policy doesn't allow.
 export interface PolicyViolation {
 	message: string;
@@ -270,6 +306,20 @@ function checkOperation(
 		return undefined;
 	}
 
+	const { allowedDestinations } = policy;
+	if (
+		allowedDestinations !== undefined &&
+		!isAllowedDestination(allowedDestinations, outflow.destination)
+	) {
+		// The address goes in the description only: n8n replaces a message that happens to contain
+		// one of Node's error codes, and an address can.
+		const field = LABELS.allowedDestinations;
+		return {
+			message: `'${field}' doesn't include the destination of operation ${number}`,
+			description: `Operation ${number} of the transaction (${type}) pays ${outflow.destination}, which isn't in '${field}' ${credential}. ${NOT_SIGNED} Check the destination, or add it to '${field}'.`,
+		};
+	}
+
 	const { allowedAssets } = policy;
 	if (allowedAssets !== undefined) {
 		// A path payment changes asset on the way, so both ends have to be in the list.
@@ -313,7 +363,11 @@ function checkOperation(
 
 // Whether the policy has a limit that only payment operations can be checked against.
 function limitsPayments(policy: Policy): boolean {
-	return policy.maxAmounts !== undefined || policy.allowedAssets !== undefined;
+	return (
+		policy.maxAmounts !== undefined ||
+		policy.allowedAssets !== undefined ||
+		policy.allowedDestinations !== undefined
+	);
 }
 
 // What a payment operation takes out of the account.
@@ -325,18 +379,26 @@ interface Outflow {
 	isCeiling: boolean;
 	// For a path payment, the asset that reaches the destination.
 	delivered?: Asset;
+	// A G account or a muxed (M) address.
+	destination: string;
 }
 
 function outflowOf(operation: OperationRecord): Outflow | undefined {
 	switch (operation.type) {
 		case 'payment':
-			return { amount: operation.amount, asset: operation.asset, isCeiling: false };
+			return {
+				amount: operation.amount,
+				asset: operation.asset,
+				isCeiling: false,
+				destination: operation.destination,
+			};
 		case 'pathPaymentStrictSend':
 			return {
 				amount: operation.sendAmount,
 				asset: operation.sendAsset,
 				isCeiling: false,
 				delivered: operation.destAsset,
+				destination: operation.destination,
 			};
 		case 'pathPaymentStrictReceive':
 			return {
@@ -344,12 +406,29 @@ function outflowOf(operation: OperationRecord): Outflow | undefined {
 				asset: operation.sendAsset,
 				isCeiling: true,
 				delivered: operation.destAsset,
+				destination: operation.destination,
 			};
 		case 'createAccount':
-			return { amount: operation.startingBalance, asset: Asset.native(), isCeiling: false };
+			return {
+				amount: operation.startingBalance,
+				asset: Asset.native(),
+				isCeiling: false,
+				destination: operation.destination,
+			};
 		default:
 			return undefined;
 	}
+}
+
+// A G entry allows that account and any muxed (M) address of it. An M entry allows only itself.
+function isAllowedDestination(allowed: string[], destination: string): boolean {
+	if (allowed.includes(destination)) {
+		return true;
+	}
+	return (
+		StrKey.isValidMed25519PublicKey(destination) &&
+		allowed.includes(extractBaseAddress(destination))
+	);
 }
 
 // Says why the credential doesn't let the node sign a message, or nothing if it does.

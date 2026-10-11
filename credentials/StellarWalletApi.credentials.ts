@@ -60,6 +60,18 @@ export class StellarWalletApi implements ICredentialType {
 				'The assets this wallet may pay in, one per line, as XLM or CODE:ISSUER. A path payment needs both the asset it sends and the asset it delivers. Leave empty to pay in any asset.',
 		},
 		{
+			displayName: 'Allowed Destinations',
+			name: 'allowedDestinations',
+			type: 'string',
+			typeOptions: {
+				rows: 4,
+			},
+			default: '',
+			placeholder: 'e.g. GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+			description:
+				'The addresses this wallet may pay, one per line. A G address also allows its muxed (M) addresses. An M address allows only itself. Leave empty to pay any address.',
+		},
+		{
 			displayName: 'Allow Message Signing',
 			name: 'allowMessageSigning',
 			type: 'boolean',
