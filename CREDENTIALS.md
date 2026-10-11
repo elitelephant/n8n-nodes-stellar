@@ -66,18 +66,25 @@ signed. These limits don't apply to messages, which have their own switch.
   issuer isn't in the list. A path payment needs both the asset it sends and the asset it delivers.
   A `createAccount` pays in XLM.
 
+- **Allowed Destinations**: the addresses the node may pay, one per line. An address is an account,
+  56 characters starting with `G`, or a muxed address, 69 characters starting with `M`, which is an
+  account plus a customer number. A `G` line allows that account and every muxed address of it. An
+  `M` line allows only that muxed address. The node checks the destination of the four payment
+  operations.
+
 - **Allow Message Signing**: whether the node may sign messages with this key, with its **Sign
   Message** operation. It is off by default, and Sign Message fails while it is off. Leave it off
   unless a workflow needs it. A signed message proves that this key signed a text, and other
   services accept such a proof, for example as a login. The node signs whatever text it receives, so
   turn it on only for a workflow that controls what that text says.
 
-**Maximum Amounts** and **Allowed Assets** can only be checked on those four payment operations.
-While either is set and **Allowed Operations** is empty, the node signs only those four types and
-fails any other operation, such as an `accountMerge`, an offer, a liquidity pool operation or a
-Soroban contract call. To sign another type with the same credential, list it in **Allowed
-Operations** together with the payment types. The node then signs it without looking at its amounts
-or assets: only the list of types covers offers, liquidity pools and Soroban.
+**Maximum Amounts**, **Allowed Assets** and **Allowed Destinations** can only be checked on those
+four payment operations. While any of them is set and **Allowed Operations** is empty, the node
+signs only those four types and fails any other operation, such as an `accountMerge`, an offer, a
+liquidity pool operation or a Soroban contract call. To sign another type with the same credential,
+list it in **Allowed Operations** together with the payment types. The node then signs it without
+looking at its amounts, assets or destinations, so an `accountMerge` in that list can send the whole
+balance to any account. Only the list of types covers offers, liquidity pools and Soroban.
 
 A limit with a mistake never counts as no limit. If the node can't read one, for example because a
 line isn't an operation type, every run fails before anything is signed. n8n also checks the limits
