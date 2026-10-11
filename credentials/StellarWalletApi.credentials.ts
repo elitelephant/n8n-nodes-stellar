@@ -48,6 +48,18 @@ export class StellarWalletApi implements ICredentialType {
 				'The highest amount of each asset that one operation may send, one per line, as XLM=100 or CODE:ISSUER=100. An asset without a line has no limit. Leave empty for no limits.',
 		},
 		{
+			displayName: 'Allowed Assets',
+			name: 'allowedAssets',
+			type: 'string',
+			typeOptions: {
+				rows: 4,
+			},
+			default: '',
+			placeholder: 'e.g. XLM',
+			description:
+				'The assets this wallet may pay in, one per line, as XLM or CODE:ISSUER. A path payment needs both the asset it sends and the asset it delivers. Leave empty to pay in any asset.',
+		},
+		{
 			displayName: 'Allow Message Signing',
 			name: 'allowMessageSigning',
 			type: 'boolean',

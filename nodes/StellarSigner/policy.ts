@@ -13,6 +13,7 @@ import {
 const LABELS = {
 	allowedOperations: 'Allowed Operations',
 	maxAmounts: 'Maximum Amounts',
+	allowedAssets: 'Allowed Assets',
 	allowMessageSigning: 'Allow Message Signing',
 };
 
@@ -68,6 +69,8 @@ const HOW_TO_WRITE_OPERATIONS =
 	"Write one operation type per line, with the names the Stellar SDK uses, such as payment, createAccount or pathPaymentStrictSend. The full list is in the credential's documentation.";
 const HOW_TO_WRITE_AMOUNTS =
 	'Write one limit per line, as the asset, an equals sign and the amount: XLM=100 for lumens, or CODE:ISSUER=100 for another asset, with up to 7 decimals.';
+const HOW_TO_WRITE_ASSETS =
+	'Write one asset per line: XLM for lumens, or CODE:ISSUER for another asset, with its code and the address of the account that issues it.';
 
 const NOT_SIGNED = 'This item was not signed.';
 
@@ -78,6 +81,8 @@ export interface Policy {
 	// The most that one operation may send of each asset, in stroops. The key is the asset as the
 	// policy writes it: XLM or CODE:ISSUER.
 	maxAmounts?: Map<string, bigint>;
+	// The assets a payment may use, written the same way.
+	allowedAssets?: string[];
 	// Signing messages is off unless the credential turns it on.
 	allowMessageSigning: boolean;
 }
@@ -125,6 +130,14 @@ export function readPolicy(credential: Record<string, unknown> | undefined): Pol
 	}
 	if (maxAmounts.size > 0) {
 		policy.maxAmounts = maxAmounts;
+	}
+
+	const allowedAssets = readAllowedAssets(credential?.allowedAssets);
+	if (!Array.isArray(allowedAssets)) {
+		return { invalid: allowedAssets };
+	}
+	if (allowedAssets.length > 0) {
+		policy.allowedAssets = allowedAssets;
 	}
 
 	return { policy };
@@ -186,6 +199,28 @@ function readMaxAmounts(value: unknown): Map<string, bigint> | PolicyProblem {
 	return limits;
 }
 
+// The assets of the list, as the policy writes them.
+function readAllowedAssets(value: unknown): string[] | PolicyProblem {
+	const field = LABELS.allowedAssets;
+	const lines = linesOf(value);
+	if (lines === undefined) {
+		return { field, problem: 'is not text', fix: HOW_TO_WRITE_ASSETS };
+	}
+	const assets: string[] = [];
+	for (const { text, lineNumber } of lines) {
+		const asset = readAsset(text);
+		if (asset === undefined) {
+			return {
+				field,
+				problem: `has a line that isn't an asset (line ${lineNumber})`,
+				fix: HOW_TO_WRITE_ASSETS,
+			};
+		}
+		assets.push(asset);
+	}
+	return assets;
+}
+
 // What a transaction has that the policy doesn't allow.
 export interface PolicyViolation {
 	message: string;
@@ -235,6 +270,27 @@ function checkOperation(
 		return undefined;
 	}
 
+	const { allowedAssets } = policy;
+	if (allowedAssets !== undefined) {
+		// A path payment changes asset on the way, so both ends have to be in the list.
+		const ends: [Asset, string][] =
+			outflow.delivered === undefined
+				? [[outflow.asset, 'pays in']]
+				: [
+						[outflow.asset, 'sends'],
+						[outflow.delivered, 'delivers'],
+					];
+		for (const [end, verb] of ends) {
+			if (!allowedAssets.includes(assetKey(end))) {
+				const field = LABELS.allowedAssets;
+				return {
+					message: `'${field}' doesn't include ${codeOf(end)}`,
+					description: `Operation ${number} of the transaction (${type}) ${verb} ${assetKey(end)}, which isn't in '${field}' ${credential}. ${NOT_SIGNED} Pay in an asset of the list, or add that asset to '${field}'.`,
+				};
+			}
+		}
+	}
+
 	const asset = assetKey(outflow.asset);
 	const limit = policy.maxAmounts?.get(asset);
 	if (limit !== undefined) {
@@ -242,7 +298,7 @@ function checkOperation(
 		const sent = readAmount(outflow.amount);
 		if (sent === undefined || sent > limit) {
 			const field = LABELS.maxAmounts;
-			const code = outflow.asset.isNative() ? 'XLM' : outflow.asset.getCode();
+			const code = codeOf(outflow.asset);
 			const sends = outflow.isCeiling ? 'may send up to' : 'sends';
 			const amount = sent === undefined ? outflow.amount : writeAmount(sent);
 			return {
@@ -257,7 +313,7 @@ function checkOperation(
 
 // Whether the policy has a limit that only payment operations can be checked against.
 function limitsPayments(policy: Policy): boolean {
-	return policy.maxAmounts !== undefined;
+	return policy.maxAmounts !== undefined || policy.allowedAssets !== undefined;
 }
 
 // What a payment operation takes out of the account.
@@ -267,6 +323,8 @@ interface Outflow {
 	asset: Asset;
 	// True when the amount is the most the operation may send, not exactly what it sends.
 	isCeiling: boolean;
+	// For a path payment, the asset that reaches the destination.
+	delivered?: Asset;
 }
 
 function outflowOf(operation: OperationRecord): Outflow | undefined {
@@ -274,9 +332,19 @@ function outflowOf(operation: OperationRecord): Outflow | undefined {
 		case 'payment':
 			return { amount: operation.amount, asset: operation.asset, isCeiling: false };
 		case 'pathPaymentStrictSend':
-			return { amount: operation.sendAmount, asset: operation.sendAsset, isCeiling: false };
+			return {
+				amount: operation.sendAmount,
+				asset: operation.sendAsset,
+				isCeiling: false,
+				delivered: operation.destAsset,
+			};
 		case 'pathPaymentStrictReceive':
-			return { amount: operation.sendMax, asset: operation.sendAsset, isCeiling: true };
+			return {
+				amount: operation.sendMax,
+				asset: operation.sendAsset,
+				isCeiling: true,
+				delivered: operation.destAsset,
+			};
 		case 'createAccount':
 			return { amount: operation.startingBalance, asset: Asset.native(), isCeiling: false };
 		default:
@@ -300,6 +368,11 @@ export function checkMessageSigning(policy: Policy): PolicyViolation | undefined
 // issued asset whose code is XLM is not the native one.
 function assetKey(asset: Asset): string {
 	return asset.isNative() ? 'XLM' : `${asset.getCode()}:${asset.getIssuer()}`;
+}
+
+// The asset's short name, for an error message. The issuer goes in the description.
+function codeOf(asset: Asset): string {
+	return asset.isNative() ? 'XLM' : asset.getCode();
 }
 
 // Reads XLM or CODE:ISSUER. The SDK decides which codes and issuers are valid. Undefined if the
