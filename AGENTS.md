@@ -112,7 +112,7 @@ actual node.
     `testnet`)
   - the optional parameters `submit`, off by default, and `horizonUrl`, which n8n shows only when
     `submit` is on: with `submit` off, the node doesn't call the network and its output is the five
-    fields above
+    fields above. n8n shows `xdr`, `network`, `submit` and `horizonUrl` only with `signTransaction`
   - the output fields `submitted` (`true`) and `ledger`, which the node adds when `submit` is on and
     Horizon confirms the transaction
   - the `error` object of an item that fails after it was signed, when the node continues on fail:
@@ -124,6 +124,9 @@ actual node.
   transaction hash is hex: `Buffer.from(transaction.hash()).toString('hex')`.
 - The network names, their passphrases and SDF's Horizon server for each one are in
   `nodes/shared/network.ts`. Use it from any node that needs them.
+- Sign Message signs whatever text reaches it, and a signed text can prove control of the account to
+  another service. It stays behind the credential's `allowMessageSigning` switch: don't add a way to
+  sign a message without it.
 - The secret key lives only in the Stellar Signer's credential. It never appears in the output, in
   error messages or in logs.
 - The signing policy is in `nodes/StellarSigner/policy.ts`, which doesn't import n8n. It reads the

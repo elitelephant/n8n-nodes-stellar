@@ -37,7 +37,7 @@ export class StellarSigner implements INodeType {
 		// For a transaction, the same value as the networkName output field.
 		subtitle:
 			'={{ $parameter["operation"] === "signMessage" ? "sign message" : $parameter["network"] }}',
-		description: 'Sign Stellar transactions using a wallet secret key',
+		description: 'Sign Stellar transactions and messages using a wallet secret key',
 		defaults: {
 			name: 'Stellar Signer',
 		},
@@ -153,7 +153,7 @@ export class StellarSigner implements INodeType {
 					},
 				},
 				description:
-					"The text to sign, as it is. The signature follows SEP-53 and proves that this wallet's key signed this exact text.",
+					"The text to sign, exactly as entered. The signature follows SEP-53 and proves that this wallet's key signed this exact text.",
 			},
 		],
 	};
@@ -225,7 +225,7 @@ export class StellarSigner implements INodeType {
 				const operation = this.getNodeParameter('operation', itemIndex, 'signTransaction');
 				if (operation === 'signMessage') {
 					returnData.push(
-						signMessage(
+						signMessageItem(
 							this.getNode(),
 							item,
 							this.getNodeParameter('message', itemIndex, ''),
@@ -393,7 +393,7 @@ export class StellarSigner implements INodeType {
 // Signs a text with the wallet's key, as SEP-53 says, and returns the item with the text, its
 // signature and the public key. It needs no network, so the item's networkName isn't read and
 // nothing is sent. The credential has to allow it.
-function signMessage(
+function signMessageItem(
 	node: INode,
 	item: INodeExecutionData,
 	message: unknown,

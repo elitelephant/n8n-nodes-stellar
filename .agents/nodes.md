@@ -84,7 +84,8 @@ description: INodeTypeDescription = {
   - You can choose to not follow this convention **ONLY if it's not applicable to the node you're
     developing** (i.e. data transformation nodes, etc.)
   - The Stellar Signer has no Resource parameter. Its Operation parameter chooses between Sign
-    Transaction, the default, and Sign Message
+    Transaction, the default, and Sign Message. Sign Message signs any text it receives, which is
+    why the credential has to allow it
 
 ## Resource and operation pattern
 

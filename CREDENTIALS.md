@@ -1,14 +1,15 @@
 # Stellar Wallet API credential
 
-The Stellar Signer node signs transactions with the secret key stored in this credential.
+The Stellar Signer node signs transactions, and messages if you allow it, with the secret key stored
+in this credential.
 
 ## The secret key
 
 - A Stellar account has two keys. The public key starts with `G` and identifies the account, so it's
   safe to share. The secret key starts with `S` and gives full control over the account and all its
   funds. Each key is 56 characters long.
-- The credential doesn't store a network. The node signs with this secret key for the network chosen
-  in its **Network** parameter.
+- The credential doesn't store a network. The node signs a transaction with this secret key for the
+  network chosen in its **Network** parameter.
 - The same secret key works on `public` and on `testnet`, but each network has its own accounts: an
   account created on `testnet` doesn't exist on `public`.
 - The node returns the public key that matches the secret key in its `publicKey` output field. It
@@ -35,7 +36,7 @@ the account again or create a new one.
 The credential can limit what the Stellar Signer signs with this secret key. Each limit on
 transactions is optional and empty by default, which means no limit. The node checks a transaction
 against the limits before it signs it. An item whose transaction breaks a limit fails and isn't
-signed.
+signed. These limits don't apply to messages, which have their own switch.
 
 - **Allowed Operations**: the operation types the node may sign, one per line. With only `payment`
   here, a transaction that has an `accountMerge` or a `setOptions` operation fails. The node checks

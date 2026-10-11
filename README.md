@@ -164,8 +164,9 @@ Each item is one transaction, and the node submits them one at a time, in order.
 With **Operation** on **Sign Message**, the node signs the text of the **Message** parameter
 (`message`) with the wallet's key, following
 [SEP-53](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0053.md). It signs
-the text exactly as it arrives, without trimming it. It doesn't need a `networkName` field in the
-item, and it sends nothing to the network.
+the text exactly as it arrives, without trimming it. A text that is empty or has only spaces and
+line breaks fails the item. The node doesn't need a `networkName` field in the item, and it sends
+nothing to the network.
 
 Each output item keeps the fields of its input item and adds:
 
@@ -174,6 +175,8 @@ Each output item keeps the fields of its input item and adds:
 | `message`   | The text that was signed.                           |
 | `signature` | The signature, 64 bytes as base64.                  |
 | `publicKey` | The public key of the account that signed the text. |
+
+If the input item already has a field with one of these names, the node's value replaces it.
 
 Anyone can check the signature with the Stellar SDK:
 `Keypair.fromPublicKey(publicKey).verifyMessage(message, Buffer.from(signature, 'base64'))`.
@@ -193,19 +196,19 @@ to get one on Testnet and how to keep it safe.
 The secret key lives only in the credential. The node never returns it in its output or in its error
 messages.
 
-The credential can also limit what the node signs. The limits are optional and empty by default,
-which means no limit:
+The credential can also limit what the node signs:
 
 - **Allowed Operations** (`allowedOperations`): the operation types the node may sign, one per line,
   such as `payment`. A transaction with any other operation fails the item before it is signed.
 - **Allow Message Signing** (`allowMessageSigning`): off by default. **Sign Message** fails unless
   it is on.
 
-A limit that the node can't read fails the whole run before anything is signed. In n8n's Community
-edition, whoever can edit the workflow can also edit the credential, so these limits guard against
-mistakes, not against that person. The limit that always holds is the account: use one with only the
-funds the workflow needs. [CREDENTIALS.md](CREDENTIALS.md#limit-what-the-node-signs) has the
-details.
+The limits on transactions are optional and empty by default, which means no limit. They don't apply
+to messages. A limit that the node can't read fails the whole run before anything is signed. In
+n8n's Community edition, whoever can edit the workflow can also edit the credential, so these limits
+guard against mistakes, not against that person. The limit that always holds is the account: use one
+with only the funds the workflow needs. [CREDENTIALS.md](CREDENTIALS.md#limit-what-the-node-signs)
+has the details.
 
 ## Compatibility
 
