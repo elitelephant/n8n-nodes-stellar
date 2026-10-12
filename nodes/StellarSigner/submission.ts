@@ -99,7 +99,8 @@ export async function checkMemoRequired(
 // What a submission that Horizon didn't confirm means for the transaction.
 // - rejected: Horizon answered with result codes.
 // - not_submitted: Horizon answered before passing it to the network, or the node didn't send it.
-// - uncertain: Horizon gave no verdict, so the transaction may still be applied.
+// - uncertain: Horizon gave no verdict, or one that isn't final, so the transaction may still be
+//   applied.
 export type SubmissionOutcome = 'rejected' | 'not_submitted' | 'uncertain';
 
 export interface SubmissionFailure {
@@ -147,16 +148,43 @@ export async function submitTransaction(
 	};
 }
 
-// The transaction result codes that don't prove the transaction wasn't applied: Horizon can also
-// answer them when the same signed transaction was sent before.
-const REJECTIONS_TO_DOUBLE_CHECK: Record<string, (transaction: Transaction) => string> = {
-	tx_bad_seq: () =>
-		"Its sequence number doesn't match the source account. If this same transaction was sent before, it may already be applied: look it up on Horizon by its hash before you build a new one. If it was never sent, another transaction used that number: build a new one.",
-	tx_too_late: (transaction) => {
-		const expiry = expiryOf(transaction);
-		return `It expired${expiry === undefined ? '' : ` at ${expiry}`}. If it was sent before that time, check that it wasn't applied: look it up on Horizon by its hash. If it isn't there, build a new transaction.`;
-	},
-};
+const RESULT_CODES_URL =
+	'https://developers.stellar.org/docs/data/apis/horizon/api-reference/errors/result-codes';
+
+// The transaction result codes that get an outcome or a description of their own. Any other code
+// is a plain rejection. A Map, because the code comes from the server's answer.
+const RESULT_CODES = new Map<
+	string,
+	(transaction: Transaction) => Pick<SubmissionFailure, 'outcome' | 'description'>
+>([
+	// Not final. Horizon answers it for a number that is ahead of the account's, and that same
+	// signed transaction is applied if it is sent again once the account gets there. Horizon
+	// answers the same for a number that another transaction already used.
+	[
+		'tx_bad_seq',
+		(transaction) => {
+			const expiry = expiryOf(transaction);
+			const until =
+				expiry === undefined ? 'later, because it has no time limit' : `until ${expiry}`;
+			return {
+				outcome: 'uncertain',
+				description: `Its sequence number isn't the next one of the source account. If the number is ahead of the account's, this same transaction can still be applied ${until}, and sending it again is safe. If another transaction already used that number, this one can't be applied, and that other transaction may be this same payment. Don't build a new one until you know which it is.`,
+			};
+		},
+	],
+	// Final for this transaction. Horizon answers it up to some seconds before the time limit, so
+	// the text doesn't say that the transaction expired.
+	[
+		'tx_too_late',
+		(transaction) => {
+			const expiry = expiryOf(transaction);
+			return {
+				outcome: 'rejected',
+				description: `Its time limit${expiry === undefined ? '' : `, ${expiry},`} passed or is seconds away, so the network no longer takes it. If this same transaction was sent before, look it up on Horizon by its hash. Before you build a new one, check that this payment wasn't already made by another transaction.`,
+			};
+		},
+	],
+]);
 
 function failureFrom(
 	error: unknown,
@@ -174,14 +202,13 @@ function failureFrom(
 			const operations = Array.isArray(codes.operations)
 				? codes.operations.filter((code) => typeof code === 'string')
 				: [];
-			const describe = REJECTIONS_TO_DOUBLE_CHECK[codes.transaction];
+			const known = RESULT_CODES.get(codes.transaction)?.(transaction);
 			return {
-				outcome: 'rejected',
+				outcome: known?.outcome ?? 'rejected',
 				message: `Horizon rejected transaction ${txHash}: ${codes.transaction}${operations.length === 0 ? '' : ` (${operations.join(', ')})`}`,
 				description:
-					describe === undefined
-						? "The transaction didn't take effect. Fix what the result codes say and build a new transaction. The codes are explained at https://developers.stellar.org/docs/data/apis/horizon/api-reference/errors/result-codes"
-						: describe(transaction),
+					known?.description ??
+					`The transaction didn't take effect. Fix what the result codes say and build a new transaction. The codes are explained at ${RESULT_CODES_URL}`,
 				cause: error,
 			};
 		}
