@@ -46,8 +46,8 @@ Parameters:
   expression, it must be `true` or `false`: n8n fails the item for any other text.
 - **Horizon URL** (`horizonUrl`): shown when **Submit to Horizon** is on, and empty by default. Set
   it to submit to another Horizon server, such as your own or a provider's. It must be an `https`
-  address; plain `http` is accepted only for a server on `localhost`. It accepts an expression, so
-  several nodes can share one address from a variable.
+  address; plain `http` is accepted only for a server on `localhost`. It can't include a user name
+  or a password. It accepts an expression, so several nodes can share one address from a variable.
 
 > **`testnet` is the default network.** To sign for the real network, choose **Public** in the
 > **Network** parameter. On the public network, a signed transaction moves real funds once it is
