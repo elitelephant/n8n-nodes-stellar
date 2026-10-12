@@ -184,6 +184,15 @@ const RESULT_CODES = new Map<
 			};
 		},
 	],
+	// A rejection, but the transaction may be in a ledger: the network includes a transaction
+	// whose operations fail, charges its fee and uses its sequence number.
+	[
+		'tx_failed',
+		() => ({
+			outcome: 'rejected',
+			description: `Its operations had no effect. Look it up on Horizon by its hash: if it is there, the network included it as failed, so its fee was charged and its sequence number was used. Fix what the result codes say and build a new transaction. The codes are explained at ${RESULT_CODES_URL}`,
+		}),
+	],
 ]);
 
 function failureFrom(
