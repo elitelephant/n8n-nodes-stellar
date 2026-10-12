@@ -130,6 +130,10 @@ actual node.
   sign a message without it.
 - The secret key lives only in the Stellar Signer's credential. It never appears in the output, in
   error messages or in logs.
+- The value of **Horizon URL** can carry a provider's key. The node keeps it out of its errors:
+  every error gets a copy of the node without that parameter (`nodeForErrors`), and no error text
+  repeats the address beyond its host. n8n still stores the address in the workflow and in the saved
+  execution.
 - The signing policy is in `nodes/StellarSigner/policy.ts`, which doesn't import n8n. It reads the
   credential's policy fields and checks the decoded transaction before the node signs it. A new
   control goes there. A credential that the node can't use signs nothing: n8n can't hand it over,

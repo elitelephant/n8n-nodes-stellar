@@ -47,7 +47,9 @@ Parameters:
 - **Horizon URL** (`horizonUrl`): shown when **Submit to Horizon** is on, and empty by default. Set
   it to submit to another Horizon server, such as your own or a provider's. It must be an `https`
   address; plain `http` is accepted only for a server on `localhost`. It can't include a user name
-  or a password. It accepts an expression, so several nodes can share one address from a variable.
+  or a password. The node keeps the address out of its errors, apart from the server's name, because
+  a provider's address can carry a key. n8n itself stores the address in the workflow as you wrote
+  it. It accepts an expression, so several nodes can share one address from a variable.
 
 > **`testnet` is the default network.** To sign for the real network, choose **Public** in the
 > **Network** parameter. On the public network, a signed transaction moves real funds once it is
