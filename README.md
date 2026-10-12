@@ -159,6 +159,11 @@ With **Continue**, that item has only the `error` object. With **Continue (using
 also keeps the fields of its input item. An item that fails before it is signed, for example for a
 wrong `networkName`, has `error` as a text with the message, as in other n8n nodes.
 
+If the node can't use the credential at all, nothing is signed. That happens when n8n can't hand the
+credential over, when the secret key is empty, or when one of the credential's limits can't be read.
+With **On Error** on **Stop Workflow**, the run fails. With one of the **Continue** options, every
+item comes out failed with that same error, so no item goes on unsigned.
+
 ### Several payments in one run
 
 Each item is one transaction, and the node submits them one at a time, in order.
@@ -230,8 +235,9 @@ only the four payment operations (`payment`, `pathPaymentStrictSend`, `pathPayme
 `createAccount`), unless **Allowed Operations** lists other types.
 
 The limits on transactions are optional: an empty limit, or a **Maximum Fee** of 0, means no limit.
-They don't apply to messages. A limit that the node can't read fails the whole run before anything
-is signed. In n8n's Community edition, whoever can edit the workflow can also edit the credential,
+They don't apply to messages. A limit that the node can't read stops every item before anything is
+signed: the run fails, or, with **On Error** on one of the **Continue** options, every item comes
+out failed. In n8n's Community edition, whoever can edit the workflow can also edit the credential,
 so these limits guard against mistakes, not against that person. The limit that always holds is the
 account: use one with only the funds the workflow needs.
 [CREDENTIALS.md](CREDENTIALS.md#limit-what-the-node-signs) has the details.

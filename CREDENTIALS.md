@@ -95,9 +95,10 @@ looking at its amounts, assets or destinations, so an `accountMerge` in that lis
 balance to any account. Only the list of types covers offers, liquidity pools and Soroban.
 
 A limit with a mistake never counts as no limit. If the node can't read one, for example because a
-line isn't an operation type, every run fails before anything is signed. n8n also checks the limits
-when you save the credential: if one has a mistake, it says that the credential test failed, and
-**More details** shows which field and which line.
+line isn't an operation type, nothing is signed: the run fails, or every item comes out failed when
+the node's **On Error** setting is one of the **Continue** options. n8n also checks the limits when
+you save the credential: if one has a mistake, it says that the credential test failed, and **More
+details** shows which field and which line.
 
 These limits protect against mistakes and against transactions that reach the workflow from outside.
 They don't protect against someone who can edit the credential. In n8n's Community edition, whoever

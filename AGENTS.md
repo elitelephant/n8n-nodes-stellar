@@ -132,8 +132,11 @@ actual node.
   error messages or in logs.
 - The signing policy is in `nodes/StellarSigner/policy.ts`, which doesn't import n8n. It reads the
   credential's policy fields and checks the decoded transaction before the node signs it. A new
-  control goes there. A policy field that can't be read fails the whole run, and its errors give the
-  line number, never the text that was entered.
+  control goes there. A credential that the node can't use signs nothing: n8n can't hand it over,
+  the secret key is empty, or a policy field can't be read. The node then throws before the items.
+  With **On Error** on a **Continue** option it returns every item failed with that error instead,
+  because n8n would pass the input items on unsigned if the node threw. Policy errors give the line
+  number, never the text that was entered.
 - The package is not eligible for n8n Cloud: it has a runtime dependency and its own ESLint config.
 - Format with `npm run format` and check with `npx prettier --check .`.
 
