@@ -22,7 +22,8 @@ const LOCAL_HOSTNAMES = ['localhost', '127.0.0.1', '[::1]'];
 // The Horizon client for the item's submission. A Horizon URL that can't be used fails the item
 // here. A value without text, such as an expression that gives nothing, counts as empty. The
 // address must be https. Plain http is accepted only for a server on this same machine, where
-// nobody can sit between the node and Horizon. It can't carry a user name or a password.
+// nobody can sit between the node and Horizon. The address can't carry a user name or a password.
+// No error here repeats the address, which can have a key in it.
 export function horizonServerFor(
 	node: INode,
 	networkName: NetworkName,
@@ -33,10 +34,10 @@ export function horizonServerFor(
 	let parsed: URL;
 	try {
 		parsed = new URL(url);
-	} catch (error) {
-		throw new NodeOperationError(node, error, {
+	} catch {
+		// The parser's own error repeats the address, so it isn't kept as the cause.
+		throw new NodeOperationError(node, "'Horizon URL' isn't a valid URL", {
 			itemIndex,
-			message: "'Horizon URL' isn't a valid URL",
 			description: ENTER_HORIZON_URL,
 		});
 	}
@@ -49,8 +50,9 @@ export function horizonServerFor(
 		});
 	}
 	// The SDK's client doesn't send a request to an address with a user name or a password, and
-	// its error repeats the whole address. This one doesn't.
-	if (parsed.username !== '' || parsed.password !== '') {
+	// its error repeats the whole address.
+	const hasCredentials = parsed.username !== '' || parsed.password !== '';
+	if (hasCredentials) {
 		throw new NodeOperationError(node, "'Horizon URL' can't have a user name or a password", {
 			itemIndex,
 			description:
