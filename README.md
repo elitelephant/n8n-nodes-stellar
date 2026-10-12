@@ -162,7 +162,8 @@ wrong `networkName`, has `error` as a text with the message, as in other n8n nod
 If the node can't use the credential at all, nothing is signed. That happens when n8n can't hand the
 credential over, when the secret key is empty, or when one of the credential's limits can't be read.
 With **On Error** on **Stop Workflow**, the run fails. With one of the **Continue** options, every
-item comes out failed with that same error, so no item goes on unsigned.
+item comes out failed instead of going on unsigned. Each has `error` as a text with that same
+message, without the fields of its input item, and the execution finishes as successful.
 
 ### Several payments in one run
 

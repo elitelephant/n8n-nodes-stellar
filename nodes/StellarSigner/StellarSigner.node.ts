@@ -175,7 +175,7 @@ export class StellarSigner implements INodeType {
 					const { problem, fix } = explainInvalidSecretKey(secretKey, error);
 					return { status: 'Error', message: `'Secret Key' ${problem}. ${fix}` };
 				}
-				// A policy that can't be read would fail every run, so saving the credential warns.
+				// A policy that can't be read signs nothing in any run, so saving the credential warns.
 				const reading = readPolicy(credential.data);
 				if ('invalid' in reading) {
 					const { field, problem, fix } = reading.invalid;
@@ -193,25 +193,29 @@ export class StellarSigner implements INodeType {
 		const items = this.getInputData();
 
 		// What the whole run needs is read before the items. With On Error on Stop Workflow, a
-		// failure here fails the run. With one of the Continue options the node can't throw: n8n
-		// would pass the input items on as they came, unsigned. So every item fails instead, with
-		// this same error and no item index.
-		let credential: Awaited<ReturnType<typeof readCredential>>;
-		try {
-			credential = await readCredential(this);
-		} catch (error) {
-			// A NodeOperationError, as n8n's and the node's own are, passes through unchanged.
-			const runError = new NodeOperationError(this.getNode(), error);
-			if (!this.continueOnFail()) {
-				throw runError;
+		// failure here fails the run, and the error goes out as it came. With one of the Continue
+		// options the node can't throw: n8n would pass the input items on as they came, unsigned.
+		// So every item fails instead, with this same error and no item index.
+		let credential: SignerCredential;
+		if (this.continueOnFail()) {
+			try {
+				credential = await readCredential(this);
+			} catch (error) {
+				// A NodeOperationError, such as n8n's own or this node's, passes through unchanged.
+				const runError = new NodeOperationError(
+					this.getNode(),
+					error instanceof Error ? error : String(error),
+				);
+				return [
+					items.map((item, itemIndex) => ({
+						json: item.json,
+						error: runError,
+						pairedItem: itemIndex,
+					})),
+				];
 			}
-			return [
-				items.map((item, itemIndex) => ({
-					json: item.json,
-					error: runError,
-					pairedItem: itemIndex,
-				})),
-			];
+		} else {
+			credential = await readCredential(this);
 		}
 		const { secretKey, policy } = credential;
 
@@ -392,12 +396,16 @@ export class StellarSigner implements INodeType {
 	}
 }
 
-// The credential's secret key and its policy, which every item needs. It throws without an item
-// index when n8n can't hand over the credential, when the secret key is empty, or when a policy
-// field can't be read: a policy that can't be read never counts as "no limit".
-async function readCredential(
-	context: IExecuteFunctions,
-): Promise<{ secretKey: unknown; policy: Policy }> {
+// What every item needs from the credential.
+interface SignerCredential {
+	secretKey: unknown;
+	policy: Policy;
+}
+
+// It throws without an item index when n8n can't hand over the credential, when the secret key is
+// empty, or when a policy field can't be read: a policy that can't be read never counts as "no
+// limit".
+async function readCredential(context: IExecuteFunctions): Promise<SignerCredential> {
 	const credentials = await context.getCredentials('stellarWalletApi');
 	const secretKey = credentials.secretKey;
 
