@@ -191,6 +191,8 @@ export class StellarSigner implements INodeType {
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const items = this.getInputData();
+		// The node that goes into every error: a copy without the Horizon URL.
+		const node = nodeForErrors(this.getNode());
 
 		// What the whole run needs is read before the items. With On Error on Stop Workflow, a
 		// failure here fails the run, and the error goes out as it came. With one of the Continue
@@ -199,13 +201,16 @@ export class StellarSigner implements INodeType {
 		let credential: SignerCredential;
 		if (this.continueOnFail()) {
 			try {
-				credential = await readCredential(this);
+				credential = await readCredential(this, node);
 			} catch (error) {
 				// A NodeOperationError, such as n8n's own or this node's, passes through unchanged.
 				const runError = new NodeOperationError(
-					this.getNode(),
+					node,
 					error instanceof Error ? error : String(error),
 				);
+				// n8n's own error comes with the node as n8n has it. TypeScript marks node as
+				// read-only, and it is a plain property.
+				Object.assign(runError, { node });
 				return [
 					items.map((item, itemIndex) => ({
 						json: item.json,
@@ -215,7 +220,7 @@ export class StellarSigner implements INodeType {
 				];
 			}
 		} else {
-			credential = await readCredential(this);
+			credential = await readCredential(this, node);
 		}
 		const { secretKey, policy } = credential;
 
@@ -232,7 +237,7 @@ export class StellarSigner implements INodeType {
 				if (operation === 'signMessage') {
 					returnData.push(
 						signMessageItem(
-							this.getNode(),
+							node,
 							item,
 							this.getNodeParameter('message', itemIndex, ''),
 							secretKey,
@@ -243,19 +248,15 @@ export class StellarSigner implements INodeType {
 					continue;
 				}
 				if (operation !== 'signTransaction') {
-					throw new NodeOperationError(
-						this.getNode(),
-						"'Operation' must be signTransaction or signMessage",
-						{
-							itemIndex,
-							description: 'Choose Sign Transaction or Sign Message in the Operation parameter.',
-						},
-					);
+					throw new NodeOperationError(node, "'Operation' must be signTransaction or signMessage", {
+						itemIndex,
+						description: 'Choose Sign Transaction or Sign Message in the Operation parameter.',
+					});
 				}
 
 				const transactionXdr = this.getNodeParameter('xdr', itemIndex, '');
 				const networkName = networkNameFrom(
-					this.getNode(),
+					node,
 					this.getNodeParameter('network', itemIndex, 'testnet'),
 					itemIndex,
 				);
@@ -263,7 +264,7 @@ export class StellarSigner implements INodeType {
 				// Checked after the Network parameter and before the XDR and the item's secret key
 				// check. An empty secret key was already rejected before the items. n8n doesn't
 				// check that an item has json, so it is read with ?. here.
-				checkItemNetwork(this.getNode(), item.json?.networkName, networkName, itemIndex);
+				checkItemNetwork(node, item.json?.networkName, networkName, itemIndex);
 
 				// With Submit to Horizon on, the server is set up before the transaction is read or
 				// signed, so a wrong setting fails the item unsigned. horizonUrl is only read then:
@@ -271,7 +272,7 @@ export class StellarSigner implements INodeType {
 				let horizon: Horizon.Server | undefined;
 				if (this.getNodeParameter('submit', itemIndex, false) === true) {
 					horizon = horizonServerFor(
-						this.getNode(),
+						node,
 						networkName,
 						this.getNodeParameter('horizonUrl', itemIndex, ''),
 						itemIndex,
@@ -281,28 +282,23 @@ export class StellarSigner implements INodeType {
 				// An empty XDR fails before the secret key is read. The SDK rejects it too, so
 				// parseTransaction throws here.
 				if (isBlank(transactionXdr)) {
-					parseTransaction(this.getNode(), transactionXdr, networkPassphrase, itemIndex);
+					parseTransaction(node, transactionXdr, networkPassphrase, itemIndex);
 				}
 
-				const keypair = keypairFromSecret(this.getNode(), secretKey, itemIndex);
-				const transaction = parseTransaction(
-					this.getNode(),
-					transactionXdr,
-					networkPassphrase,
-					itemIndex,
-				);
+				const keypair = keypairFromSecret(node, secretKey, itemIndex);
+				const transaction = parseTransaction(node, transactionXdr, networkPassphrase, itemIndex);
 				// The credential's policy is checked on the decoded transaction, before it is
 				// signed and before any request to the network.
 				const violation = checkPolicy(policy, transaction);
 				if (violation !== undefined) {
-					throw new NodeOperationError(this.getNode(), violation.message, {
+					throw new NodeOperationError(node, violation.message, {
 						itemIndex,
 						description: violation.description,
 					});
 				}
 				// The last check before signing, and the only one that needs the network.
 				if (horizon !== undefined) {
-					await checkMemoRequired(this.getNode(), horizon, transaction, itemIndex);
+					await checkMemoRequired(node, horizon, transaction, itemIndex);
 				}
 				transaction.sign(keypair);
 
@@ -361,7 +357,7 @@ export class StellarSigner implements INodeType {
 							continue;
 						}
 						throw new NodeOperationError(
-							this.getNode(),
+							node,
 							failure.cause instanceof Error ? failure.cause : failure.message,
 							{ itemIndex, message: failure.message, description: failure.description },
 						);
@@ -374,7 +370,9 @@ export class StellarSigner implements INodeType {
 				returnData.push(newItem);
 			} catch (error) {
 				// A NodeOperationError passes through unchanged and keeps its own itemIndex.
-				const nodeError = new NodeOperationError(this.getNode(), error, { itemIndex });
+				const nodeError = new NodeOperationError(node, error, { itemIndex });
+				// An error that n8n built comes with the node as n8n has it.
+				Object.assign(nodeError, { node });
 				if (this.continueOnFail()) {
 					returnData.push({
 						json: items[itemIndex].json,
@@ -396,6 +394,20 @@ export class StellarSigner implements INodeType {
 	}
 }
 
+// What goes in the place of the Horizon URL in the node that is attached to an error.
+const HIDDEN_HORIZON_URL = '[hidden by the node]';
+
+// n8n attaches the node, with its saved parameters, to every error, and hands that error to the
+// error workflow. The address of a provider's Horizon can carry a key, so the copy of the node
+// that goes into this node's errors doesn't have the address. n8n still keeps it in the workflow.
+function nodeForErrors(node: INode): INode {
+	const { horizonUrl } = node.parameters;
+	if (horizonUrl === undefined || horizonUrl === '') {
+		return node;
+	}
+	return { ...node, parameters: { ...node.parameters, horizonUrl: HIDDEN_HORIZON_URL } };
+}
+
 // What every item needs from the credential.
 interface SignerCredential {
 	secretKey: unknown;
@@ -405,21 +417,21 @@ interface SignerCredential {
 // It throws without an item index when n8n can't hand over the credential, when the secret key is
 // empty, or when a policy field can't be read: a policy that can't be read never counts as "no
 // limit".
-async function readCredential(context: IExecuteFunctions): Promise<SignerCredential> {
+async function readCredential(context: IExecuteFunctions, node: INode): Promise<SignerCredential> {
 	const credentials = await context.getCredentials('stellarWalletApi');
 	const secretKey = credentials.secretKey;
 
 	// The SDK rejects an empty secret key like any secret key it can't use, so keypairFromSecret
 	// throws here.
 	if (isBlank(secretKey)) {
-		keypairFromSecret(context.getNode(), secretKey);
+		keypairFromSecret(node, secretKey);
 	}
 
 	const reading = readPolicy(credentials);
 	if ('invalid' in reading) {
 		const { field, problem, fix } = reading.invalid;
 		throw new NodeOperationError(
-			context.getNode(),
+			node,
 			`'${field}' in the Stellar Wallet API credential ${problem}`,
 			{ description: `${fix} Nothing was signed.` },
 		);
