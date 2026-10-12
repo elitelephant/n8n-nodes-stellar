@@ -97,14 +97,15 @@ messages count a transaction's operations from 1 and a run's items from 0, as n8
 The node submits once. If Horizon doesn't confirm the transaction, the item fails, and the error
 says which of these happened:
 
-| Outcome         | What happened                                                                                                                                                                          | What to do                                                                                                               |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `rejected`      | Horizon answered with result codes, such as `tx_failed` and `op_underfunded`.                                                                                                          | Fix what the codes say and build a new transaction. For `tx_too_late`, check first that the payment wasn't already made. |
-| `not_submitted` | The transaction didn't reach the network. Horizon answered before it passed it on, for example with a rate limit, or the node didn't send it because an earlier item had the same one. | Do what the error's description says.                                                                                    |
-| `uncertain`     | Horizon gave no final answer: it timed out or answered with a server error, the connection failed, the answer wasn't Horizon's, or it rejected the transaction with `tx_bad_seq`.      | Look the transaction up by its hash before anything else.                                                                |
+| Outcome         | What happened                                                                                                                                                                          | What to do                                                                                                                |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `rejected`      | Horizon answered with result codes, such as `tx_failed` and `op_underfunded`.                                                                                                          | Fix what the codes say and build a new transaction. For `tx_too_late`, check first that the payment wasn't already made.  |
+| `not_submitted` | The transaction didn't reach the network. Horizon answered before it passed it on, for example with a rate limit, or the node didn't send it because an earlier item had the same one. | Do what the error's description says.                                                                                     |
+| `uncertain`     | Horizon gave no final answer: it timed out or answered with a server error, the connection failed, the answer wasn't Horizon's, or it rejected the transaction with `tx_bad_seq`.      | Look the transaction up by its hash before anything else. For `tx_bad_seq`, compare sequence numbers, as explained below. |
 
-An uncertain result doesn't mean the transaction failed. The network can still apply it until the
-time limit it was built with, and the error gives that time. Look it up by its hash, for example at
+An uncertain result doesn't mean the transaction failed. Unless the error says `tx_bad_seq`, which
+is explained below, the network can still apply the transaction until the time limit it was built
+with, and the error gives that time. Look it up by its hash, for example at
 `<Horizon URL>/transactions/<txHash>`.
 
 Sending the same signed transaction again is safe, because the network applies a transaction only
@@ -122,22 +123,26 @@ What can pay twice is a **new** transaction for the same payment, which has anot
 build one until you know that the first wasn't applied.
 
 The result code `tx_bad_seq` is uncertain too. Every account numbers its transactions, and Horizon
-answers `tx_bad_seq` when a transaction's number isn't the next one of its account. That has two
-meanings, and Horizon's answer doesn't say which. If the number is ahead of the account's, the same
-signed transaction can still be applied later, once the account gets to that number. If another
-transaction already used the number, this one can't be applied, and that other transaction may be
-the same payment built twice. To tell them apart, compare the account's sequence number, at
-`<Horizon URL>/accounts/<account>`, with the transaction's.
+answers `tx_bad_seq` when a transaction's number isn't the next one for its account. That has two
+meanings, and Horizon's answer doesn't say which. Compare the account's sequence number, at
+`<Horizon URL>/accounts/<account>`, with the transaction's. If the account's number is lower, the
+transaction is ahead: it can still be applied if it is sent again once the account gets to the
+number before it, until its time limit. If the account's number is equal or higher, the account
+already used that number and this transaction can't be applied anymore. The transaction that used it
+may be the same payment built twice: the account's last transactions are at
+`<Horizon URL>/accounts/<account>/transactions`.
 
 The result code `tx_too_late` is a rejection: the transaction's time limit passed, or is seconds
-away, and the network no longer takes it. After either code, check that the payment wasn't already
-made by another transaction before you build a new one.
+away, and the network no longer takes it. After `tx_bad_seq` or `tx_too_late`, check that the
+payment wasn't already made before you build a new transaction.
+
+A `tx_failed` transaction may have been included in a ledger as failed. Then its fee was charged,
+its sequence number was used, and Horizon has it under its hash.
 
 Leave n8n's **Retry On Fail** setting off on this node while **Submit to Horizon** is on. A retry
 runs the node again for all its items, also the ones whose transactions were already applied, and
 sends every transaction again. That can't pay twice: Horizon answers a transaction that it already
-applied, and still has in its history, with the first result. But a retry can't fix a rejected
-transaction, and it repeats every request of the run.
+applied, and still has in its history, with the first result.
 
 With the node's **On Error** setting on one of the **Continue** options, an item that fails after it
 was signed has an `error` object with what you need to follow it up:

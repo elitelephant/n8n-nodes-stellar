@@ -97,7 +97,7 @@ export async function checkMemoRequired(
 }
 
 // What a submission that Horizon didn't confirm means for the transaction.
-// - rejected: Horizon answered with result codes.
+// - rejected: Horizon answered with result codes that are final for the transaction.
 // - not_submitted: Horizon answered before passing it to the network, or the node didn't send it.
 // - uncertain: Horizon gave no verdict, or one that isn't final, so the transaction may still be
 //   applied.
@@ -164,11 +164,10 @@ const RESULT_CODES = new Map<
 		'tx_bad_seq',
 		(transaction) => {
 			const expiry = expiryOf(transaction);
-			const until =
-				expiry === undefined ? 'later, because it has no time limit' : `until ${expiry}`;
+			const when = expiry === undefined ? 'later, because it has no time limit' : `until ${expiry}`;
 			return {
 				outcome: 'uncertain',
-				description: `Its sequence number isn't the next one of the source account. If the number is ahead of the account's, this same transaction can still be applied ${until}, and sending it again is safe. If another transaction already used that number, this one can't be applied, and that other transaction may be this same payment. Don't build a new one until you know which it is.`,
+				description: `The transaction's sequence number isn't the next one for its source account. If the number is ahead of the account's, this same transaction can still be applied ${when}, and sending it again is safe. If the account already used that number, this transaction can't be applied anymore, and the one that used it may be this same payment. To know which, compare the account's sequence number on Horizon with this transaction's. Don't build a new one until you know.`,
 			};
 		},
 	],
@@ -180,7 +179,7 @@ const RESULT_CODES = new Map<
 			const expiry = expiryOf(transaction);
 			return {
 				outcome: 'rejected',
-				description: `Its time limit${expiry === undefined ? '' : `, ${expiry},`} passed or is seconds away, so the network no longer takes it. If this same transaction was sent before, look it up on Horizon by its hash. Before you build a new one, check that this payment wasn't already made by another transaction.`,
+				description: `Its time limit${expiry === undefined ? '' : `, ${expiry},`} passed or is seconds away, so the network no longer takes it. Before you build a new one, check that this payment wasn't already made: by this same transaction, if it was sent before, or by another one.`,
 			};
 		},
 	],
@@ -212,9 +211,14 @@ function failureFrom(
 				? codes.operations.filter((code) => typeof code === 'string')
 				: [];
 			const known = RESULT_CODES.get(codes.transaction)?.(transaction);
+			const named = `${codes.transaction}${operations.length === 0 ? '' : ` (${operations.join(', ')})`}`;
 			return {
 				outcome: known?.outcome ?? 'rejected',
-				message: `Horizon rejected transaction ${txHash}: ${codes.transaction}${operations.length === 0 ? '' : ` (${operations.join(', ')})`}`,
+				// Without Continue On Fail, the message is all that says which outcome it is.
+				message:
+					known?.outcome === 'uncertain'
+						? `The result of transaction ${txHash} is uncertain: Horizon answered ${named}, which isn't final`
+						: `Horizon rejected transaction ${txHash}: ${named}`,
 				description:
 					known?.description ??
 					`The transaction didn't take effect. Fix what the result codes say and build a new transaction. The codes are explained at ${RESULT_CODES_URL}`,
