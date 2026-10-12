@@ -22,7 +22,7 @@ const LOCAL_HOSTNAMES = ['localhost', '127.0.0.1', '[::1]'];
 // The Horizon client for the item's submission. A Horizon URL that can't be used fails the item
 // here. A value without text, such as an expression that gives nothing, counts as empty. The
 // address must be https. Plain http is accepted only for a server on this same machine, where
-// nobody can sit between the node and Horizon.
+// nobody can sit between the node and Horizon. It can't carry a user name or a password.
 export function horizonServerFor(
 	node: INode,
 	networkName: NetworkName,
@@ -46,6 +46,15 @@ export function horizonServerFor(
 			itemIndex,
 			description:
 				"This node submits to a Horizon server over https. Plain http is accepted only for localhost. Enter an https address, or leave the field empty to use SDF's server for the network.",
+		});
+	}
+	// The SDK's client doesn't send a request to an address with a user name or a password, and
+	// its error repeats the whole address. This one doesn't.
+	if (parsed.username !== '' || parsed.password !== '') {
+		throw new NodeOperationError(node, "'Horizon URL' can't have a user name or a password", {
+			itemIndex,
+			description:
+				"The node can't send requests to an address with a user name or a password in it. Remove them from the address, or leave the field empty to use SDF's server for the network.",
 		});
 	}
 	// The SDK accepts any scheme once allowHttp is on, so the scheme is checked above.
