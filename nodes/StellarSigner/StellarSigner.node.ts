@@ -191,27 +191,29 @@ export class StellarSigner implements INodeType {
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const items = this.getInputData();
-		const credentials = await this.getCredentials('stellarWalletApi');
-		const secretKey = credentials.secretKey;
 
-		// An empty secret key fails the whole run, before the items and without an item index. The
-		// SDK rejects it like any secret key it can't use, so keypairFromSecret throws here.
-		if (isBlank(secretKey)) {
-			keypairFromSecret(this.getNode(), secretKey);
+		// What the whole run needs is read before the items. With On Error on Stop Workflow, a
+		// failure here fails the run. With one of the Continue options the node can't throw: n8n
+		// would pass the input items on as they came, unsigned. So every item fails instead, with
+		// this same error and no item index.
+		let credential: Awaited<ReturnType<typeof readCredential>>;
+		try {
+			credential = await readCredential(this);
+		} catch (error) {
+			// A NodeOperationError, as n8n's and the node's own are, passes through unchanged.
+			const runError = new NodeOperationError(this.getNode(), error);
+			if (!this.continueOnFail()) {
+				throw runError;
+			}
+			return [
+				items.map((item, itemIndex) => ({
+					json: item.json,
+					error: runError,
+					pairedItem: itemIndex,
+				})),
+			];
 		}
-
-		// A policy that can't be read fails the whole run too, before the items: it never counts
-		// as "no limit".
-		const reading = readPolicy(credentials);
-		if ('invalid' in reading) {
-			const { field, problem, fix } = reading.invalid;
-			throw new NodeOperationError(
-				this.getNode(),
-				`'${field}' in the Stellar Wallet API credential ${problem}`,
-				{ description: `${fix} Nothing was signed.` },
-			);
-		}
-		const { policy } = reading;
+		const { secretKey, policy } = credential;
 
 		const returnData: INodeExecutionData[] = [];
 		// With Submit to Horizon on: the transactions Horizon applied in this run, and the item that
@@ -255,8 +257,8 @@ export class StellarSigner implements INodeType {
 				);
 				const networkPassphrase = NETWORK_PASSPHRASES[networkName];
 				// Checked after the Network parameter and before the XDR and the item's secret key
-				// check. An empty secret key still fails the run before the items. n8n doesn't check
-				// that an item has json, so it is read with ?. here.
+				// check. An empty secret key was already rejected before the items. n8n doesn't
+				// check that an item has json, so it is read with ?. here.
 				checkItemNetwork(this.getNode(), item.json?.networkName, networkName, itemIndex);
 
 				// With Submit to Horizon on, the server is set up before the transaction is read or
@@ -390,6 +392,33 @@ export class StellarSigner implements INodeType {
 	}
 }
 
+// The credential's secret key and its policy, which every item needs. It throws without an item
+// index when n8n can't hand over the credential, when the secret key is empty, or when a policy
+// field can't be read: a policy that can't be read never counts as "no limit".
+async function readCredential(
+	context: IExecuteFunctions,
+): Promise<{ secretKey: unknown; policy: Policy }> {
+	const credentials = await context.getCredentials('stellarWalletApi');
+	const secretKey = credentials.secretKey;
+
+	// The SDK rejects an empty secret key like any secret key it can't use, so keypairFromSecret
+	// throws here.
+	if (isBlank(secretKey)) {
+		keypairFromSecret(context.getNode(), secretKey);
+	}
+
+	const reading = readPolicy(credentials);
+	if ('invalid' in reading) {
+		const { field, problem, fix } = reading.invalid;
+		throw new NodeOperationError(
+			context.getNode(),
+			`'${field}' in the Stellar Wallet API credential ${problem}`,
+			{ description: `${fix} Nothing was signed.` },
+		);
+	}
+	return { secretKey, policy: reading.policy };
+}
+
 // Signs a text with the wallet's key, as SEP-53 says, and returns the item with the text, its
 // signature and the public key. It needs no network, so the item's networkName isn't read and
 // nothing is sent. The credential has to allow it.
@@ -483,7 +512,7 @@ function checkItemNetwork(
 	}
 }
 
-// The item index is left out for an empty secret key, which is checked before the items.
+// The item index is left out for an empty secret key, which is checked once, before the items.
 function keypairFromSecret(node: INode, secretKey: unknown, itemIndex?: number): Keypair {
 	try {
 		// The SDK decides first, also when the value isn't text.
