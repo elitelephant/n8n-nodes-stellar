@@ -130,10 +130,13 @@ actual node.
   sign a message without it.
 - The secret key lives only in the Stellar Signer's credential. It never appears in the output, in
   error messages or in logs.
-- The value of **Horizon URL** can carry a provider's key. The node keeps it out of its errors:
-  every error gets a copy of the node without that parameter (`nodeForErrors`), and no error text
-  repeats the address beyond its host. n8n still stores the address in the workflow and in the saved
-  execution.
+- The value of **Horizon URL** can carry a provider's key. The node keeps it out of the errors that
+  n8n stores and sends to an error workflow. Every error that the node creates, or that passes
+  through its `catch` blocks, gets a copy of the node with that parameter hidden (`nodeForErrors`),
+  and no error text names more of the address than the server. Pass that copy, `node`, to every new
+  error, never `this.getNode()`. Two things stay outside the node: n8n keeps the address in the
+  workflow and in the saved execution, and with **On Error** on **Stop Workflow** the error that n8n
+  throws for a missing credential goes out as it came.
 - The signing policy is in `nodes/StellarSigner/policy.ts`, which doesn't import n8n. It reads the
   credential's policy fields and checks the decoded transaction before the node signs it. A new
   control goes there. A credential that the node can't use signs nothing: n8n can't hand it over,

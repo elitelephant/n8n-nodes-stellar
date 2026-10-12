@@ -191,7 +191,7 @@ export class StellarSigner implements INodeType {
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const items = this.getInputData();
-		// The node that goes into every error: a copy without the Horizon URL.
+		// The node that goes into every error: a copy with the Horizon URL hidden.
 		const node = nodeForErrors(this.getNode());
 
 		// What the whole run needs is read before the items. With On Error on Stop Workflow, a
@@ -203,13 +203,13 @@ export class StellarSigner implements INodeType {
 			try {
 				credential = await readCredential(this, node);
 			} catch (error) {
-				// A NodeOperationError, such as n8n's own or this node's, passes through unchanged.
+				// A NodeOperationError, such as n8n's own or this node's, comes back as the same error.
 				const runError = new NodeOperationError(
 					node,
 					error instanceof Error ? error : String(error),
 				);
-				// n8n's own error comes with the node as n8n has it. TypeScript marks node as
-				// read-only, and it is a plain property.
+				// n8n's own error has the node as n8n keeps it, so it gets the copy. TypeScript marks
+				// node as read-only, and it is a plain property.
 				Object.assign(runError, { node });
 				return [
 					items.map((item, itemIndex) => ({
@@ -369,9 +369,9 @@ export class StellarSigner implements INodeType {
 
 				returnData.push(newItem);
 			} catch (error) {
-				// A NodeOperationError passes through unchanged and keeps its own itemIndex.
+				// A NodeOperationError comes back as the same error and keeps its own itemIndex.
 				const nodeError = new NodeOperationError(node, error, { itemIndex });
-				// An error that n8n built comes with the node as n8n has it.
+				// One that n8n built has the node as n8n keeps it, so it gets the copy.
 				Object.assign(nodeError, { node });
 				if (this.continueOnFail()) {
 					returnData.push({
@@ -397,9 +397,10 @@ export class StellarSigner implements INodeType {
 // What goes in the place of the Horizon URL in the node that is attached to an error.
 const HIDDEN_HORIZON_URL = '[hidden by the node]';
 
-// n8n attaches the node, with its saved parameters, to every error, and hands that error to the
-// error workflow. The address of a provider's Horizon can carry a key, so the copy of the node
-// that goes into this node's errors doesn't have the address. n8n still keeps it in the workflow.
+// n8n attaches the node, with its saved parameters, to every error, stores that error with the
+// execution and hands it to the error workflow. The address of a provider's Horizon can carry a
+// key, so the copy of the node that goes into this node's errors has a mark in its place. n8n
+// still keeps the address in the workflow and in its own copy of the node.
 function nodeForErrors(node: INode): INode {
 	const { horizonUrl } = node.parameters;
 	if (horizonUrl === undefined || horizonUrl === '') {
