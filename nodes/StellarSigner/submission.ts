@@ -162,6 +162,10 @@ export async function submitTransaction(
 const RESULT_CODES_URL =
 	'https://developers.stellar.org/docs/data/apis/horizon/api-reference/errors/result-codes';
 
+// How the two rejections that the same transaction can get past later end their description.
+const ONLY_ONE_OF_THE_TWO =
+	'Do only one of the two: if this one and a new one are both applied, the payment is made twice.';
+
 // The transaction result codes that get an outcome or a description of their own. Any other code
 // is a plain rejection. A Map, because the code comes from the server's answer.
 const RESULT_CODES = new Map<
@@ -191,6 +195,26 @@ const RESULT_CODES = new Map<
 			return {
 				outcome: 'rejected',
 				description: `Its time limit${expiry === undefined ? '' : `, ${expiry},`} passed or is seconds away, so the network no longer takes it. Before you build a new one, check that this payment wasn't already made: by this same transaction, if it was sent before, or by another one.`,
+			};
+		},
+	],
+	// Rejections that this same signed transaction can get past later: when the network asks for
+	// a lower fee, or when its start time comes. The network did not take it, so they stay
+	// rejections, and the text gives the two ways to go on and says not to take both.
+	[
+		'tx_insufficient_fee',
+		(transaction) => ({
+			outcome: 'rejected',
+			description: `Its fee, ${transaction.fee} stroops, is too small: lower than the network's minimum, or lower than what other transactions are offering while the network is busy. It was not included in the ledger. Build a new transaction with a higher fee, or send this same signed transaction again later if the network was busy. ${ONLY_ONE_OF_THE_TWO}`,
+		}),
+	],
+	[
+		'tx_too_early',
+		(transaction) => {
+			const start = startOf(transaction);
+			return {
+				outcome: 'rejected',
+				description: `Its start time${start === undefined ? '' : `, ${start},`} hasn't come yet, so it was not included in the ledger. Send this same signed transaction again after that time, or build a new one that can start now. ${ONLY_ONE_OF_THE_TWO}`,
 			};
 		},
 	],
@@ -358,11 +382,21 @@ function uncertain(
 
 // When the transaction stops being valid, from its time bounds, or undefined if it never does.
 function expiryOf(transaction: Transaction): string | undefined {
-	const maxTime = Number(transaction.timeBounds?.maxTime ?? 0);
-	if (!Number.isFinite(maxTime) || maxTime <= 0) {
+	return utcMinute(transaction.timeBounds?.maxTime);
+}
+
+// When the transaction starts being valid, from its time bounds, or undefined if it has no start.
+function startOf(transaction: Transaction): string | undefined {
+	return utcMinute(transaction.timeBounds?.minTime);
+}
+
+// A time bound, in seconds since 1970, as a date and time in UTC. Zero means the bound isn't set.
+function utcMinute(timeBound: string | undefined): string | undefined {
+	const seconds = Number(timeBound ?? 0);
+	if (!Number.isFinite(seconds) || seconds <= 0) {
 		return undefined;
 	}
-	return `${new Date(maxTime * 1000).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+	return `${new Date(seconds * 1000).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
 }
 
 // The title of a Horizon error body, which always has a type, a title and the HTTP status.
