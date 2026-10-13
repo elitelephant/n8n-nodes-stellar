@@ -56,20 +56,21 @@ their own switch.
 
 - **Maximum Amounts**: the most that one operation may send of each asset, one limit per line. Write
   `XLM=100` for lumens, or `CODE:ISSUER=100` for another asset, with its code and the address of the
-  account that issues it. An amount can have up to 7 decimals. The node looks at what leaves the
-  account: the amount of a `payment`, what a `pathPaymentStrictSend` sends, the most a
-  `pathPaymentStrictReceive` may send, and the starting balance of a `createAccount`. While the
-  field has any line, an operation that sends an asset without a line fails, so write a line for
-  every asset the wallet pays in. A path payment needs a line only for the asset it sends. The limit
-  is for each operation, not for the transaction or the run: ten payments of 10 pass a limit of 10.
-  A limit of 0 means the node sends none of that asset, unlike **Maximum Fee**, where 0 means no
-  limit. Asset codes are case-sensitive, so a limit for `usdc` is not a limit for `USDC`: a payment
-  in `USDC` then fails, because it has no line.
+  account that issues it. `native` also means lumens, as the Stellar SDK and CLI write them. An
+  amount can have up to 7 decimals. The node looks at what leaves the account: the amount of a
+  `payment`, what a `pathPaymentStrictSend` sends, the most a `pathPaymentStrictReceive` may send,
+  and the starting balance of a `createAccount`. While the field has any line, an operation that
+  sends an asset without a line fails, so write a line for every asset the wallet pays in. A path
+  payment needs a line only for the asset it sends. The limit is for each operation, not for the
+  transaction or the run: ten payments of 10 pass a limit of 10. A limit of 0 means the node sends
+  none of that asset, unlike **Maximum Fee**, where 0 means no limit. Asset codes are
+  case-sensitive, so a limit for `usdc` is not a limit for `USDC`: a payment in `USDC` then fails,
+  because it has no line.
 
 - **Allowed Assets**: the assets the node may pay in, one per line, written as in **Maximum
-  Amounts**: `XLM`, or `CODE:ISSUER`. The issuer is part of the asset, so the same code from another
-  issuer isn't in the list. A path payment needs both the asset it sends and the asset it delivers.
-  A `createAccount` pays in XLM.
+  Amounts**: `XLM` (or `native`), or `CODE:ISSUER`. The issuer is part of the asset, so the same
+  code from another issuer isn't in the list. A path payment needs both the asset it sends and the
+  asset it delivers. A `createAccount` pays in XLM.
 
 - **Allowed Destinations**: the addresses the node may pay, one per line. An address is an account,
   56 characters starting with `G`, or a muxed address, 69 characters starting with `M`, which is an
