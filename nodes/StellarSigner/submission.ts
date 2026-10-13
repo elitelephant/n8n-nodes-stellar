@@ -503,7 +503,7 @@ function uncertain(
 	const until =
 		expiry === undefined
 			? 'It has no time limit, so it can still be applied later. Look it up on Horizon by its hash.'
-			: `It can still be applied until ${expiry}. Look it up on Horizon by its hash. If it isn't there after that time, it was not applied.`;
+			: `It can still be applied until ${expiry}. Look it up on Horizon by its hash. If it isn't there after that time, look at the account's sequence number: if it is lower than ${transaction.sequence}, this transaction was not applied.`;
 	const from = UNCERTAIN_ANSWERS[answer](host);
 	return {
 		outcome: 'uncertain',
