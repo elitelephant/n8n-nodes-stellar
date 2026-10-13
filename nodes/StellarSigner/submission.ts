@@ -4,6 +4,7 @@ import {
 	AccountRequiresMemoError,
 	Horizon,
 	NetworkError,
+	NotFoundError,
 	type Transaction,
 	TransactionFailedError,
 } from '@stellar/stellar-sdk';
@@ -12,6 +13,37 @@ import { horizonUrlFor, type NetworkName } from '../shared/network';
 
 // The SDK's own limit for the submission request, used for every request to Horizon.
 const REQUEST_TIMEOUT_MS = 60000;
+
+// Horizon names each of its errors with a type under this address.
+const HORIZON_ERROR_TYPES = 'https://stellar.org/horizon-errors/';
+
+// The errors Horizon answers before it passes a transaction to the network: the ones of its
+// router and the ones its submission handler returns before it calls its submission system.
+const NOT_SUBMITTED_TYPES = [
+	'transaction_malformed',
+	'transaction_submission_disabled',
+	'unsupported_media_type',
+	'bad_request',
+	'not_found',
+	'not_acceptable',
+	'rate_limit_exceeded',
+];
+
+// Result codes of a transaction that was applied. They can't come with a rejection.
+const SUCCESS_CODES = ['tx_success', 'tx_fee_bump_inner_success'];
+
+// After an uncertain result the node looks the transaction up by its hash: at once, and then
+// once per ledger, which takes about 5 seconds, for as long as Horizon itself waits for one.
+const LOOKUP_INTERVAL_MS = 5000;
+const LOOKUP_SECONDS = 30;
+
+// What the look-up adds to the description of a result that stays uncertain.
+const NOT_FOUND_IN_TIME = `The node looked for it on Horizon for ${LOOKUP_SECONDS} seconds and didn't find it.`;
+const COULD_NOT_LOOK_UP = "The node couldn't look it up on Horizon.";
+
+// The HTTP status of the last answer each client got. The SDK hands back only the body of a
+// successful answer, and it takes any 2xx as a success.
+const LAST_STATUS = new WeakMap<Horizon.Server, number>();
 
 const ENTER_HORIZON_URL =
 	"Enter the address of a Horizon server, for example https://horizon-testnet.stellar.org, or leave the field empty to use SDF's server for the network.";
@@ -65,6 +97,10 @@ export function horizonServerFor(
 	horizon.httpClient.defaults.timeout = REQUEST_TIMEOUT_MS;
 	// A redirect would send the signed transaction to another server.
 	horizon.httpClient.defaults.maxRedirects = 0;
+	horizon.httpClient.interceptors.response.use((response) => {
+		LAST_STATUS.set(horizon, response.status);
+		return response;
+	});
 	return horizon;
 }
 
@@ -120,33 +156,51 @@ export interface SubmissionFailure {
 	description: string;
 	// The SDK's error, when there is one.
 	cause?: unknown;
+	// Where in the description the sentence about the look-up goes, for an uncertain result.
+	lookupAt?: number;
 }
 
 export type SubmissionResult = { ledger: number } | { failure: SubmissionFailure };
 
 // Submits a signed transaction once and says what happened, without throwing. The memo check ran
-// before signing, so it is skipped here.
+// before signing, so it is skipped here. When the answer gives no verdict, the node looks the
+// transaction up by its hash before it says that the result is uncertain.
 export async function submitTransaction(
+	horizon: Horizon.Server,
+	transaction: Transaction,
+	txHash: string,
+): Promise<SubmissionResult> {
+	const result = await submitOnce(horizon, transaction, txHash);
+	if ('failure' in result && result.failure.outcome === 'uncertain') {
+		return await lookUp(horizon, txHash, result.failure);
+	}
+	return result;
+}
+
+async function submitOnce(
 	horizon: Horizon.Server,
 	transaction: Transaction,
 	txHash: string,
 ): Promise<SubmissionResult> {
 	const host = horizon.serverURL.host;
 	let response: unknown;
+	LAST_STATUS.delete(horizon);
 	try {
 		response = await horizon.submitTransaction(transaction, { skipMemoRequiredCheck: true });
 	} catch (error) {
 		return { failure: failureFrom(error, transaction, txHash, host) };
 	}
-	// The SDK takes any 200 as a success. Horizon's answer is the transaction itself: its hash, the
-	// ledger that included it, and successful.
+	// Horizon answers an applied transaction with a 200 and the transaction itself: its hash, the
+	// ledger that included it, and successful. Nothing else proves that it was applied.
+	const ledger = isRecord(response) ? positiveLedger(response.ledger) : undefined;
 	if (
+		LAST_STATUS.get(horizon) === 200 &&
 		isRecord(response) &&
 		response.hash === txHash &&
-		Number.isInteger(response.ledger) &&
+		ledger !== undefined &&
 		response.successful === true
 	) {
-		return { ledger: response.ledger as number };
+		return { ledger };
 	}
 	return {
 		failure: uncertain(
@@ -157,6 +211,82 @@ export async function submitTransaction(
 			'foreign',
 		),
 	};
+}
+
+// Looks for the transaction on the same Horizon: at once, and then every 5 seconds for 30. A
+// transaction that is there has a verdict. One that isn't there yet can still be applied, so the
+// result stays uncertain, and the description says that the node looked.
+async function lookUp(
+	horizon: Horizon.Server,
+	txHash: string,
+	failure: SubmissionFailure,
+): Promise<SubmissionResult> {
+	for (let waited = 0; ; waited += LOOKUP_INTERVAL_MS) {
+		const found = await findByHash(horizon, txHash);
+		if (found === 'unreachable') {
+			return { failure: withLookup(failure, COULD_NOT_LOOK_UP) };
+		}
+		if (found !== 'missing') {
+			return found.successful
+				? { ledger: found.ledger }
+				: { failure: includedAsFailed(txHash, found.ledger) };
+		}
+		if (waited >= LOOKUP_SECONDS * 1000) {
+			return { failure: withLookup(failure, NOT_FOUND_IN_TIME) };
+		}
+		await new Promise((resolve) => setTimeout(resolve, LOOKUP_INTERVAL_MS));
+	}
+}
+
+// What Horizon has for the hash: the transaction with its ledger, nothing yet, or no usable
+// answer. Only Horizon's own not_found says that it doesn't have the transaction.
+async function findByHash(
+	horizon: Horizon.Server,
+	txHash: string,
+): Promise<{ ledger: number; successful: boolean } | 'missing' | 'unreachable'> {
+	let record: unknown;
+	LAST_STATUS.delete(horizon);
+	try {
+		record = await horizon.transactions().transaction(txHash).call();
+	} catch (error) {
+		const body = error instanceof NotFoundError ? error.getResponse() : undefined;
+		return horizonErrorType(body, 404) === 'not_found' ? 'missing' : 'unreachable';
+	}
+	if (LAST_STATUS.get(horizon) !== 200 || !isRecord(record) || record.hash !== txHash) {
+		return 'unreachable';
+	}
+	// The SDK moves the ledger of a record it fetched to ledger_attr.
+	const ledger = positiveLedger(
+		typeof record.ledger === 'number' ? record.ledger : record.ledger_attr,
+	);
+	if (ledger === undefined || typeof record.successful !== 'boolean') {
+		return 'unreachable';
+	}
+	return { ledger, successful: record.successful };
+}
+
+function withLookup(failure: SubmissionFailure, sentence: string): SubmissionFailure {
+	const at = failure.lookupAt ?? 0;
+	const { description } = failure;
+	return {
+		...failure,
+		description: `${description.slice(0, at)}${sentence} ${description.slice(at)}`,
+	};
+}
+
+// The look-up found the transaction in a ledger with its operations failed.
+function includedAsFailed(txHash: string, ledger: number): SubmissionFailure {
+	return {
+		outcome: 'rejected',
+		message: `Transaction ${txHash} is in ledger ${ledger} as failed`,
+		description:
+			'Horizon gave no result when the node sent it, so the node looked it up: the network included it as failed. Its operations had no effect, its fee was charged and its sequence number was used. Build a new transaction for this payment.',
+	};
+}
+
+// A ledger number that a ledger can have.
+function positiveLedger(value: unknown): number | undefined {
+	return Number.isSafeInteger(value) && (value as number) > 0 ? (value as number) : undefined;
 }
 
 const RESULT_CODES_URL =
@@ -237,11 +367,13 @@ function failureFrom(
 ): SubmissionFailure {
 	const response = isRecord(error) && isRecord(error.response) ? error.response : undefined;
 	const status = typeof response?.status === 'number' ? response.status : undefined;
+	const type = status === undefined ? undefined : horizonErrorType(response?.data, status);
 
-	// Horizon applies or rejects a transaction with a 400 that has result codes.
-	if (error instanceof TransactionFailedError && status === 400) {
+	// Horizon rejects a transaction with a 400 of its type transaction_failed that has result
+	// codes.
+	if (error instanceof TransactionFailedError && status === 400 && type === 'transaction_failed') {
 		const codes = error.getResultCodes();
-		if (typeof codes.transaction === 'string') {
+		if (typeof codes.transaction === 'string' && !SUCCESS_CODES.includes(codes.transaction)) {
 			const operations = Array.isArray(codes.operations)
 				? codes.operations.filter((code) => typeof code === 'string')
 				: [];
@@ -258,6 +390,7 @@ function failureFrom(
 					known?.description ??
 					`The transaction didn't take effect. Fix what the result codes say and build a new transaction. The codes are explained at ${RESULT_CODES_URL}`,
 				cause: error,
+				lookupAt: 0,
 			};
 		}
 	}
@@ -277,19 +410,18 @@ function failureFrom(
 		);
 	}
 
-	// Horizon's own 4xx answers come before it passes the transaction to the network. The
-	// exception is 499, which it writes after that when the client disconnects. A rate limit
-	// passes by waiting. The others come back until their cause is fixed.
-	const problem = horizonProblemTitle(response?.data, status);
-	if (status >= 400 && status < 500 && status !== 499 && problem !== undefined) {
+	// Only an error that Horizon answers before it passes the transaction to the network says
+	// that the transaction was not submitted. The HTTP status alone doesn't: it is about the
+	// request. A rate limit passes by waiting. The others come back until their cause is fixed.
+	if (type !== undefined && NOT_SUBMITTED_TYPES.includes(type)) {
 		const next =
-			status === 429
+			type === 'rate_limit_exceeded'
 				? 'Wait and send this same signed transaction again: that is safe.'
 				: "Sending this same signed transaction again is safe, but Horizon will answer the same until the cause is fixed: check 'Horizon URL' and the transaction.";
 		return {
 			outcome: 'not_submitted',
 			message: `Horizon didn't accept transaction ${txHash}: ${statusText(status)}`,
-			description: `Horizon answered "${problem}" before passing it to the network, so it was not submitted. ${next}`,
+			description: `Horizon answered "${horizonErrorTitle(response?.data)}" before passing it to the network, so it was not submitted. ${next}`,
 			cause: error,
 		};
 	}
@@ -299,7 +431,7 @@ function failureFrom(
 		txHash,
 		host,
 		`the server answered ${statusText(status)}`,
-		problem === undefined ? 'foreign' : 'horizon',
+		type === undefined ? 'foreign' : 'horizon',
 		error,
 	);
 }
@@ -372,11 +504,13 @@ function uncertain(
 		expiry === undefined
 			? 'It has no time limit, so it can still be applied later. Look it up on Horizon by its hash.'
 			: `It can still be applied until ${expiry}. Look it up on Horizon by its hash. If it isn't there after that time, it was not applied.`;
+	const from = UNCERTAIN_ANSWERS[answer](host);
 	return {
 		outcome: 'uncertain',
 		message: `The result of transaction ${txHash} is uncertain: ${reason}`,
-		description: `${UNCERTAIN_ANSWERS[answer](host)} ${until} Sending this same signed transaction again is safe: it can be applied only once. Don't build a new one for this payment until you know.`,
+		description: `${from} ${until} Sending this same signed transaction again is safe: it can be applied only once. Don't build a new one for this payment until you know.`,
 		cause,
+		lookupAt: from.length + 1,
 	};
 }
 
@@ -399,17 +533,24 @@ function utcMinute(timeBound: string | undefined): string | undefined {
 	return `${new Date(seconds * 1000).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
 }
 
-// The title of a Horizon error body, which always has a type, a title and the HTTP status.
-function horizonProblemTitle(body: unknown, status: number): string | undefined {
+// The name of a Horizon error, such as transaction_malformed, or undefined if the body isn't one
+// of Horizon's. Its errors always have a type under Horizon's address, a title and the HTTP
+// status. Any gateway can answer with those three fields, so the type has to be Horizon's.
+function horizonErrorType(body: unknown, status: number): string | undefined {
 	if (
 		isRecord(body) &&
 		typeof body.type === 'string' &&
+		body.type.startsWith(HORIZON_ERROR_TYPES) &&
 		typeof body.title === 'string' &&
 		body.status === status
 	) {
-		return body.title;
+		return body.type.slice(HORIZON_ERROR_TYPES.length);
 	}
 	return undefined;
+}
+
+function horizonErrorTitle(body: unknown): string {
+	return isRecord(body) && typeof body.title === 'string' ? body.title : '';
 }
 
 // The status with its usual name. The server's own reason phrase isn't used: it can be anything.
