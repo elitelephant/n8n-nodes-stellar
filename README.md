@@ -115,7 +115,9 @@ with, and the error gives that time. Look it up by its hash, for example at
 `<Horizon URL>/transactions/<txHash>`. The node already looked for it there, for up to 30 seconds,
 and the error says whether it didn't find it or couldn't look. Not finding a transaction on a
 Horizon server doesn't prove that it wasn't applied: a server can be set up to keep only some
-transactions, or only recent ones.
+transactions, or only recent ones. After the time limit, the account's sequence number settles it:
+if it is lower than the transaction's, the transaction was not applied. The error gives the
+transaction's number.
 
 Only Horizon's own errors count as `not_submitted`. An error from another server, such as a 401 from
 a provider that didn't accept its key, comes out as `uncertain`, and its description says to check

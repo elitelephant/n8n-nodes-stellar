@@ -123,7 +123,9 @@ actual node.
     `successful`; `rejected` only for Horizon's `transaction_failed` with a failure code;
     `not_submitted` only for the errors Horizon answers before it passes a transaction on, told by
     their `type`; anything else is `uncertain`, and then the node looks the transaction up by its
-    hash, at once and every 5 seconds for up to 30 seconds
+    hash, at once and every 5 seconds for up to 30 seconds. Not finding it doesn't prove that it
+    wasn't applied, because a Horizon server can keep only some transactions: the error sends the
+    user to the account's sequence number and gives the transaction's
   - `appliedTransactions` in the data of an error that stops a run after Horizon applied
     transactions of earlier items: `itemIndex`, `txHash` and `ledger` for each one
 - The Stellar SDK is `@stellar/stellar-sdk`, pinned to `17.1.0` as a runtime dependency. The
