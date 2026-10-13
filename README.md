@@ -224,7 +224,7 @@ The credential can also limit what the node signs:
   such as `payment`. A transaction with any other operation fails the item before it is signed.
 - **Maximum Amounts** (`maxAmounts`): the most that one operation may send of each asset, one limit
   per line, as `XLM=100` or `CODE:ISSUER=100`, where `ISSUER` is the address of the account that
-  issues the asset.
+  issues the asset. While it has any line, an operation that sends an asset without a line fails.
 - **Allowed Assets** (`allowedAssets`): the assets the node may pay in, one per line, written the
   same way. A path payment needs the asset it sends and the asset it delivers.
 - **Allowed Destinations** (`allowedDestinations`): the addresses the node may pay, one per line. A
