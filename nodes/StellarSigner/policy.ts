@@ -485,7 +485,7 @@ export function checkMessageSigning(policy: Policy): PolicyViolation | undefined
 	const field = LABELS.allowMessageSigning;
 	return {
 		message: `'${field}' is off ${IN_CREDENTIAL}`,
-		description: `Sign Message signs any text it receives with this wallet's key, and a signed text can prove control of the account to another service. Turn on '${field}' in the credential only if this workflow should do that. ${NOT_SIGNED}`,
+		description: `Sign Message signs any text it receives with this wallet's key, and a signed text can prove control of the key to another service. Turn on '${field}' in the credential only if this workflow should do that. ${NOT_SIGNED}`,
 	};
 }
 

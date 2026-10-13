@@ -89,7 +89,7 @@ export class StellarWalletApi implements ICredentialType {
 			type: 'boolean',
 			default: false,
 			description:
-				'Whether the Stellar Signer may sign messages (SEP-53) with this wallet. Leave it off unless a workflow needs it: a signed message can prove control of the account to another service.',
+				'Whether the Stellar Signer may sign messages (SEP-53) with this wallet. Leave it off unless a workflow needs it: a signed message can prove control of the key to another service.',
 		},
 	];
 }
