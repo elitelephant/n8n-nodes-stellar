@@ -112,9 +112,10 @@ error says which of these happened:
 An uncertain result doesn't mean the transaction failed. Unless the error says `tx_bad_seq`, which
 is explained below, the network can still apply the transaction until the time limit it was built
 with, and the error gives that time. Look it up by its hash, for example at
-`<Horizon URL>/transactions/<txHash>`. The node already looked for 30 seconds, and the error says
-so. Not finding a transaction on a Horizon server doesn't prove that it wasn't applied: a server can
-be set up to keep only some transactions, or only recent ones.
+`<Horizon URL>/transactions/<txHash>`. The node already looked for it there, for up to 30 seconds,
+and the error says whether it didn't find it or couldn't look. Not finding a transaction on a
+Horizon server doesn't prove that it wasn't applied: a server can be set up to keep only some
+transactions, or only recent ones.
 
 Only Horizon's own errors count as `not_submitted`. An error from another server, such as a 401 from
 a provider that didn't accept its key, comes out as `uncertain`, and its description says to check
