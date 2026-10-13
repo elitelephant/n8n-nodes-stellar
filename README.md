@@ -139,6 +139,11 @@ The result code `tx_too_late` is a rejection: the transaction's time limit passe
 away, and the network no longer takes it. After `tx_bad_seq` or `tx_too_late`, check that the
 payment wasn't already made before you build a new transaction.
 
+The result codes `tx_insufficient_fee` and `tx_too_early` are rejections that the same signed
+transaction can get past later: when the network asks for a lower fee, or when its start time comes.
+Send that same transaction again later or build a new one, but not both: if the two are applied, the
+payment is made twice.
+
 A `tx_failed` transaction may have been included in a ledger as failed. Then its fee was charged,
 its sequence number was used, and Horizon has it under its hash.
 
