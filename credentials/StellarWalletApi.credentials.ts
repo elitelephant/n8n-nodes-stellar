@@ -45,7 +45,7 @@ export class StellarWalletApi implements ICredentialType {
 			default: '',
 			placeholder: 'e.g. XLM=100',
 			description:
-				'The highest amount of each asset that one operation may send, one per line, as XLM=100 or CODE:ISSUER=100, where ISSUER is the address of the account that issues the asset. An asset without a line has no limit. Leave empty for no limits.',
+				'The highest amount of each asset that one operation may send, one per line, as XLM=100 or CODE:ISSUER=100, where ISSUER is the address of the account that issues the asset. While any limit is set, a payment that sends an asset without a line fails. Leave empty for no limits.',
 		},
 		{
 			displayName: 'Allowed Assets',

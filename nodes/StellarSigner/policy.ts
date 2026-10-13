@@ -89,7 +89,7 @@ export interface Policy {
 	// Operation types, as the SDK names them.
 	allowedOperations?: string[];
 	// The most that one operation may send of each asset, in stroops. The key is the asset as the
-	// policy writes it: XLM or CODE:ISSUER.
+	// policy writes it: XLM or CODE:ISSUER. With any limit, an asset that has none isn't signed.
 	maxAmounts?: Map<string, bigint>;
 	// The assets a payment may use, written the same way.
 	allowedAssets?: string[];
@@ -376,13 +376,22 @@ function checkOperation(
 		}
 	}
 
-	const key = assetKey(outflow.asset);
-	const limit = policy.maxAmounts?.get(key);
-	if (limit !== undefined) {
+	const { maxAmounts } = policy;
+	if (maxAmounts !== undefined) {
+		const key = assetKey(outflow.asset);
+		const limit = maxAmounts.get(key);
+		const field = LABELS.maxAmounts;
+		// An asset without a line isn't signed: a line with a mistake in the asset, such as its
+		// code in another letter case, would leave the real asset without a limit.
+		if (limit === undefined) {
+			return {
+				message: `'${field}' has no limit for the asset of operation ${operationNumber}`,
+				description: `${start} (${type}) sends ${key}, which has no line in '${field}' ${IN_CREDENTIAL}. ${NOT_SIGNED} Use an asset that has a limit, or add a line for that asset to '${field}'.`,
+			};
+		}
 		// An amount that can't be read counts as over the limit.
 		const sent = readAmount(outflow.amount);
 		if (sent === undefined || sent > limit) {
-			const field = LABELS.maxAmounts;
 			const [sends, sendsInFull] = outflow.isCeiling
 				? ['may send', 'may send up to']
 				: ['sends', 'sends'];
