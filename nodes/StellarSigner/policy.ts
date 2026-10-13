@@ -72,9 +72,9 @@ const PAYMENT_TYPES = [
 const HOW_TO_WRITE_OPERATIONS =
 	"Write one operation type per line, with the names the Stellar SDK uses, such as payment, createAccount or pathPaymentStrictSend. The full list is in the credential's documentation.";
 const HOW_TO_WRITE_AMOUNTS =
-	'Write one limit per line, as the asset, an equals sign and the amount: XLM=100 for lumens, or CODE:ISSUER=100 for another asset, with up to 7 decimals.';
+	'Write one limit per line, as the asset, an equals sign and the amount: XLM=100 or native=100 for lumens, or CODE:ISSUER=100 for another asset, with up to 7 decimals.';
 const HOW_TO_WRITE_ASSETS =
-	'Write one asset per line: XLM for lumens, or CODE:ISSUER for another asset, with its code and the address of the account that issues it.';
+	'Write one asset per line: XLM or native for lumens, or CODE:ISSUER for another asset, with its code and the address of the account that issues it.';
 const HOW_TO_WRITE_DESTINATIONS =
 	'Write one account address per line: 56 characters starting with G, or a muxed address of 69 characters starting with M.';
 
@@ -495,10 +495,11 @@ function assetKey(asset: Asset): string {
 	return asset.isNative() ? 'XLM' : `${asset.getCode()}:${asset.getIssuer()}`;
 }
 
-// Reads XLM or CODE:ISSUER. The SDK decides which codes and issuers are valid. Undefined if the
-// text is neither.
+// Reads XLM or CODE:ISSUER. The native asset can also be written native, as the Stellar SDK and
+// CLI write it. The SDK decides which codes and issuers are valid. Undefined if the text is none
+// of them.
 function readAsset(text: string): string | undefined {
-	if (text.toUpperCase() === 'XLM') {
+	if (text.toUpperCase() === 'XLM' || text.toLowerCase() === 'native') {
 		return 'XLM';
 	}
 	// Without an issuer, the SDK would take the code XLM as the native asset.
