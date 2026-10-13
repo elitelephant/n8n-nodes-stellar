@@ -119,6 +119,11 @@ actual node.
   - the `error` object of an item that fails after it was signed, when the node continues on fail:
     `message`, `description`, `outcome` (`rejected`, `not_submitted` or `uncertain`), `txHash` and
     `signedXdr`. An item that fails before it is signed keeps n8n's usual shape
+  - how a submission is judged: submitted only for a 200 with the same hash, a ledger above 0 and
+    `successful`; `rejected` only for Horizon's `transaction_failed` with a failure code;
+    `not_submitted` only for the errors Horizon answers before it passes a transaction on, told by
+    their `type`; anything else is `uncertain`, and then the node looks the transaction up by its
+    hash, at once and every 5 seconds for up to 30 seconds
   - `appliedTransactions` in the data of an error that stops a run after Horizon applied
     transactions of earlier items: `itemIndex`, `txHash` and `ledger` for each one
 - The Stellar SDK is `@stellar/stellar-sdk`, pinned to `17.1.0` as a runtime dependency. The
