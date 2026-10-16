@@ -61,7 +61,7 @@ export class StellarSigner implements INodeType {
 						value: 'testnet',
 					},
 				],
-				default: 'testnet',
+				default: 'public',
 				description: 'The Stellar network to use',
 			},
 		],
@@ -108,7 +108,9 @@ export class StellarSigner implements INodeType {
 			try {
 				const transactionXdr = this.getNodeParameter('xdr', itemIndex, '');
 				// The SDK's network names (Networks.PUBLIC, Networks.TESTNET), in lowercase.
-				const networkName = this.getNodeParameter('network', itemIndex, 'testnet');
+				const networkName = normalizeNetworkName(
+					this.getNodeParameter('network', itemIndex, 'public'),
+				);
 				const networkPassphrase = passphraseFor(this.getNode(), networkName, itemIndex);
 
 				// An empty XDR fails before the secret key is read. The SDK rejects it too, so
@@ -165,8 +167,13 @@ export class StellarSigner implements INodeType {
 	}
 }
 
-// Any other value, such as the 0.1.1 value mainnet, fails instead of signing for a network the user
-// didn't choose.
+// 0.1.1 saved the public network as mainnet. Reading it as public keeps those workflows signing for
+// the network they were saved with.
+function normalizeNetworkName<T>(networkName: T): T | 'public' {
+	return networkName === 'mainnet' ? 'public' : networkName;
+}
+
+// Any other value fails instead of signing for a network the user didn't choose.
 function passphraseFor(node: INode, networkName: unknown, itemIndex: number): string {
 	if (networkName === 'public') {
 		return Networks.PUBLIC;
