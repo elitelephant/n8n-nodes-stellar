@@ -101,7 +101,7 @@ export class StellarSigner implements INodeType {
 						value: 'testnet',
 					},
 				],
-				default: 'testnet',
+				default: 'public',
 				displayOptions: {
 					show: {
 						operation: ['signTransaction'],
@@ -257,7 +257,7 @@ export class StellarSigner implements INodeType {
 				const transactionXdr = this.getNodeParameter('xdr', itemIndex, '');
 				const networkName = networkNameFrom(
 					node,
-					this.getNodeParameter('network', itemIndex, 'testnet'),
+					normalizeNetworkName(this.getNodeParameter('network', itemIndex, 'public')),
 					itemIndex,
 				);
 				const networkPassphrase = NETWORK_PASSPHRASES[networkName];
@@ -485,8 +485,13 @@ function signMessageItem(
 	return newItem;
 }
 
-// Any other value, such as the 0.1.1 value mainnet, fails instead of signing for a network the user
-// didn't choose.
+// 0.1.1 saved the public network as mainnet. Reading it as public keeps those workflows signing for
+// the network they were saved with.
+function normalizeNetworkName<T>(networkName: T): T | 'public' {
+	return networkName === 'mainnet' ? 'public' : networkName;
+}
+
+// Any other value fails instead of signing for a network the user didn't choose.
 function networkNameFrom(node: INode, value: unknown, itemIndex: number): NetworkName {
 	if (isNetworkName(value)) {
 		return value;

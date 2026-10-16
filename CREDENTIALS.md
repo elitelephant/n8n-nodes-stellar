@@ -116,8 +116,8 @@ always holds is the account itself: use a separate account with only the funds t
 - Try your workflow on `testnet` first. On `public`, a signed transaction moves real funds once it
   is submitted to the network. With **Submit to Horizon** on, the node submits it right after it
   signs it.
-- `testnet` is the node's default network. To sign for the real network, choose **Public** in the
-  **Network** parameter. Check it before you run a workflow.
+- `public` is the node's default network. To try a workflow without real funds, choose **Testnet**
+  in the **Network** parameter. Check it before you run a workflow.
 
 More about accounts and keys:
 [Create an account](https://developers.stellar.org/docs/build/guides/transactions/create-account) in

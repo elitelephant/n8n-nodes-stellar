@@ -64,10 +64,11 @@ Parameters:
   sends to an error workflow: they name only the server. n8n itself stores the address in the
   workflow as you wrote it.
 
-> **`testnet` is the default network.** To sign for the real network, choose **Public** in the
-> **Network** parameter. On the public network, a signed transaction moves real funds once it is
-> submitted, and with **Submit to Horizon** on the node submits it itself. Check the **Network**
-> parameter before you run a workflow.
+> **`public` is the default network.** On the public network, a signed transaction moves real funds
+> once it is submitted, and with **Submit to Horizon** on the node submits it itself. To try a
+> workflow without real funds, choose **Testnet** in the **Network** parameter. Check the
+> **Network** parameter before you run a workflow. Workflows saved with the 0.1.1 value `mainnet`
+> sign for the public network.
 
 Each input item must have a `networkName` field with `public` or `testnet`, the network the
 transaction was built for. The Stellar Signer signs only when that value is the same as the

@@ -9,7 +9,7 @@ export class StellarWalletApi implements ICredentialType {
 		dark: 'file:../nodes/StellarSigner/stellarLogo.dark.svg',
 	};
 
-	documentationUrl = 'https://github.com/yripper/n8n-nodes-stellar/blob/master/CREDENTIALS.md';
+	documentationUrl = 'https://github.com/yripper/n8n-nodes-stellar/blob/main/CREDENTIALS.md';
 
 	properties: INodeProperties[] = [
 		{

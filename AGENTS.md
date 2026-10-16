@@ -104,8 +104,8 @@ actual node.
     with the `message` parameter
   - the output of `signMessage`: the input item's fields plus `message`, `signature` (base64) and
     `publicKey`, without network fields. It doesn't read `networkName` and doesn't call the network
-  - the parameters `xdr` and `network`, with `testnet` as the default, which n8n does not save in
-    the workflow
+  - the parameters `xdr` and `network`, with `public` as the default, which n8n does not save in the
+    workflow, and `mainnet` read as `public`, the value 0.1.1 saved
   - the `networkName` field of each input item (`public` or `testnet`), which must be the same as
     the `network` parameter: the node fails the item without signing it when the field is missing or
     different
