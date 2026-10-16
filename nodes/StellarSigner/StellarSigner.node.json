@@ -17,7 +17,7 @@
 	"resources": {
 		"primaryDocumentation": [{ "url": "https://github.com/yripper/n8n-nodes-stellar" }],
 		"credentialDocumentation": [
-			{ "url": "https://github.com/yripper/n8n-nodes-stellar/blob/master/CREDENTIALS.md" }
+			{ "url": "https://github.com/yripper/n8n-nodes-stellar/blob/main/CREDENTIALS.md" }
 		]
 	}
 }
