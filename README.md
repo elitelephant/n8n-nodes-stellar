@@ -20,19 +20,7 @@ automation platform.
 ## Installation
 
 Follow the [installation guide](https://docs.n8n.io/integrations/community-nodes/installation/) in
-the n8n community nodes documentation. It installs the version that is published on npm.
-
-The version on npm can be older than this repository. As of October 2026 it is 0.1.1, which signs
-transactions but doesn't submit them, has no limits in the credential and doesn't sign messages. To
-run this repository's code in a self-hosted n8n, build the package and install it by hand:
-
-1. Clone this repository and run `npm install`, `npm run build` and `npm pack` in its folder. The
-   last command creates the file `n8n-nodes-stellar-<version>.tgz`.
-2. In n8n's community nodes folder, `~/.n8n/nodes`, run `npm install <path to the .tgz file>`.
-   Create the folder if it doesn't exist. n8n's
-   [manual installation guide](https://docs.n8n.io/integrations/community-nodes/installation/manual-install/)
-   describes it.
-3. Restart n8n.
+the n8n community nodes documentation.
 
 ## Operations
 
