@@ -1,37 +1,50 @@
 {
   "name": "n8n-nodes-stellar",
-  "version": "0.1.1",
-  "description": "Stellar nodes for n8n",
+  "version": "0.2.0",
+  "description": "Sign Stellar transactions in n8n workflows",
   "keywords": [
-    "n8n-community-node-package"
+    "n8n-community-node-package",
+    "stellar",
+    "xlm",
+    "blockchain",
+    "crypto",
+    "cryptocurrency",
+    "web3",
+    "signing",
+    "xdr"
   ],
   "license": "MIT",
-  "homepage": "",
+  "homepage": "https://github.com/yripper/n8n-nodes-stellar#readme",
   "author": {
     "name": "coderipper",
     "email": "dev@joaquinsoza.dev"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/joaquinsoza/n8n-nodes-stellar.git"
+    "url": "https://github.com/yripper/n8n-nodes-stellar.git"
   },
   "engines": {
-    "node": ">=20.15"
+    "node": ">=24.0.0"
   },
   "main": "index.js",
   "scripts": {
-    "build": "npx rimraf dist && tsc && gulp build:icons",
-    "dev": "tsc --watch",
-    "format": "prettier nodes credentials --write",
-    "lint": "eslint nodes credentials package.json",
-    "lintfix": "eslint nodes credentials package.json --fix",
-    "prepublishOnly": "npm run build && npm run lint -c .eslintrc.prepublish.js nodes credentials package.json"
+    "build": "n8n-node build",
+    "build:watch": "tsc --watch",
+    "dev": "n8n-node dev",
+    "format": "prettier . --write",
+    "lint": "n8n-node lint",
+    "lint:fix": "n8n-node lint --fix",
+    "release": "n8n-node release",
+    "prepublishOnly": "n8n-node prerelease"
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/**/*.map",
+    "!dist/tsconfig.tsbuildinfo"
   ],
   "n8n": {
     "n8nNodesApiVersion": 1,
+    "strict": false,
     "credentials": [
       "dist/credentials/StellarWalletApi.credentials.js"
     ],
@@ -40,17 +53,16 @@
     ]
   },
   "devDependencies": {
-    "@typescript-eslint/parser": "~8.32.0",
-    "eslint": "^8.57.0",
-    "eslint-plugin-n8n-nodes-base": "^1.16.3",
-    "gulp": "^5.0.0",
-    "prettier": "^3.5.3",
-    "typescript": "^5.8.2"
+    "@n8n/node-cli": "*",
+    "eslint": "9.32.0",
+    "prettier": "3.6.2",
+    "release-it": "^19.0.4",
+    "typescript": "5.9.2"
   },
   "peerDependencies": {
     "n8n-workflow": "*"
   },
   "dependencies": {
-    "@stellar/stellar-sdk": "^13.0.0"
+    "@stellar/stellar-sdk": "17.1.0"
   }
 }

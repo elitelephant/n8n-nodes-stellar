@@ -1,13 +1,15 @@
-import {
-	ICredentialType,
-	INodeProperties,
-} from 'n8n-workflow';
+import { Icon, ICredentialType, INodeProperties } from 'n8n-workflow';
 
 export class StellarWalletApi implements ICredentialType {
 	name = 'stellarWalletApi';
 	displayName = 'Stellar Wallet API';
 
-	documentationUrl = 'https://developers.stellar.org/docs/fundamentals/wallets';
+	icon: Icon = {
+		light: 'file:../nodes/StellarSigner/stellarLogo.svg',
+		dark: 'file:../nodes/StellarSigner/stellarLogo.dark.svg',
+	};
+
+	documentationUrl = 'https://github.com/yripper/n8n-nodes-stellar/blob/master/CREDENTIALS.md';
 
 	properties: INodeProperties[] = [
 		{
@@ -18,7 +20,7 @@ export class StellarWalletApi implements ICredentialType {
 				password: true,
 			},
 			default: '',
-			placeholder: 'SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+			placeholder: 'e.g. SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
 			description: 'The secret key of your Stellar wallet (starts with S)',
 		},
 	];
