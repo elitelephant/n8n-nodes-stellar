@@ -296,6 +296,10 @@ const RESULT_CODES_URL =
 const ONLY_ONE_OF_THE_TWO =
 	'Do only one of the two: if this one and a new one are both applied, the payment is made twice.';
 
+// A fee bump wraps the signed transaction without signing it again and pays its fee from the
+// account that signs the fee bump. The node doesn't sign fee bumps, so it is built outside.
+const FEE_BUMP = 'wrap it in a fee bump transaction';
+
 // The transaction result codes that get an outcome or a description of their own. Any other code
 // is a plain rejection. A Map, because the code comes from the server's answer.
 const RESULT_CODES = new Map<
@@ -327,12 +331,13 @@ const RESULT_CODES = new Map<
 	],
 	// Rejections that this same signed transaction can get past later: when the network asks for
 	// a lower fee, or when its start time comes. The network did not take it, so they stay
-	// rejections, and the text gives the two ways to go on and says not to take both.
+	// rejections, and the text gives the ways to go on and says not to add a new transaction. A
+	// fee bump raises the fee without a new transaction.
 	[
 		'tx_insufficient_fee',
 		(transaction) => ({
 			outcome: 'rejected',
-			description: `Its fee, ${transaction.fee} stroops, is too small: lower than the network's minimum, or lower than what other transactions are offering while the network is busy. It was not included in the ledger. Build a new transaction with a higher fee, or send this same signed transaction again later if the network was busy. ${ONLY_ONE_OF_THE_TWO}`,
+			description: `Its fee, ${transaction.fee} stroops, is too small: lower than the network's minimum, or lower than what other transactions are offering while the network is busy. It was not included in the ledger. Send this same signed transaction again later if the network was busy, or ${FEE_BUMP} with a higher fee, built and signed outside this node by the account that pays the fee, for example with the Stellar SDK. Neither can pay twice. Building a new transaction with a higher fee also works, but then don't send this one again: if both are applied, the payment is made twice.`,
 		}),
 	],
 	[

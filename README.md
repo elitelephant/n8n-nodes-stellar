@@ -156,7 +156,11 @@ that the payment wasn't already made before you build a new transaction.
 The result codes `tx_insufficient_fee` and `tx_too_early` are rejections that the same signed
 transaction can get past later: when the network asks for a lower fee, or when its start time or
 first ledger comes. Send that same transaction again later or build a new one, but not both: if the
-two are applied, the payment is made twice.
+two are applied, the payment is made twice. For `tx_insufficient_fee` there is a third way: wrap the
+same signed transaction in a fee bump transaction with a higher fee. A fee bump is built and signed
+outside this node, for example with the Stellar SDK, by the account that pays the fee. It doesn't
+sign the inner transaction again or change its sequence number, so, like sending it again, it can't
+pay twice, and it works only while the inner transaction is within its limits.
 
 The result code `tx_bad_auth` is a rejection for the signatures. When the account needs more
 signature weight than the transaction carries, the same signed transaction can still be applied:
