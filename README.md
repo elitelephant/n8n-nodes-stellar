@@ -240,7 +240,10 @@ messages.
 The credential can also limit what the node signs:
 
 - **Allowed Operations** (`allowedOperations`): the operation types the node may sign, one per line,
-  such as `payment`. A transaction with any other operation fails the item before it is signed.
+  such as `payment`. A transaction with any other operation fails the item before it is signed. With
+  `invokeHostFunction` in the list, the node signs Soroban contract calls without looking at what
+  they do, and its signature can authorize the call, such as a token allowance that outlasts the
+  run.
 - **Maximum Amounts** (`maxAmounts`): the most that one operation may send of each asset, one limit
   per line, as `XLM=100` or `CODE:ISSUER=100`, where `ISSUER` is the address of the account that
   issues the asset. `XLM` can also be written `native`. While it has any line, an operation that

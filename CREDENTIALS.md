@@ -96,6 +96,13 @@ list it in **Allowed Operations** together with the payment types. The node then
 looking at its amounts, assets or destinations, so an `accountMerge` in that list can send the whole
 balance to any account. Only the list of types covers offers, liquidity pools and Soroban.
 
+`invokeHostFunction` calls a Soroban smart contract, and the node doesn't look at what the call
+does. When the contract asks this account to authorize the call and the account is the source of the
+transaction, the signature on the transaction is that authorization: no other signature is needed. A
+call to a token's `approve`, for example, lets another account spend from this one until the
+allowance's expiration ledger passes or someone revokes it, also after the workflow has stopped.
+List `invokeHostFunction` only for a workflow that controls which contract and function it calls.
+
 A limit with a mistake never counts as no limit. If the node can't read one, for example because a
 line isn't an operation type, nothing is signed: the run fails, or every item comes out failed when
 the node's **On Error** setting is one of the **Continue** options. n8n also checks the limits when
