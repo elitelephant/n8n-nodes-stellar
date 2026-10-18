@@ -56,7 +56,8 @@ Parameters:
 > once it is submitted, and with **Submit to Horizon** on the node submits it itself. To try a
 > workflow without real funds, choose **Testnet** in the **Network** parameter. Check the
 > **Network** parameter before you run a workflow. Workflows saved with the 0.1.1 value `mainnet`
-> sign for the public network.
+> sign for the public network once their items carry `networkName` set to `public`, as described
+> below.
 
 Each input item must have a `networkName` field with `public` or `testnet`, the network the
 transaction was built for. The Stellar Signer signs only when that value is the same as the
