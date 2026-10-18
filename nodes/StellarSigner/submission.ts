@@ -345,6 +345,24 @@ const RESULT_CODES = new Map<
 			};
 		},
 	],
+	// Rejections for the signatures. tx_bad_auth also comes from too little signature weight, and
+	// then this same signed transaction can still get in with another signer's signature. With
+	// tx_bad_auth_extra it can't: signing the unsigned transaction again keeps its hash.
+	[
+		'tx_bad_auth',
+		() => ({
+			outcome: 'rejected',
+			description: `Its signatures don't authorize it: they don't add up to the weight the account requires, a key isn't a signer of the account, or they were made for another network than this Horizon server's. It was not included in the ledger, so no fee was charged and the account's sequence number didn't change. If the account needs more signatures, this same signed transaction can still be applied: pass the signedXdr output through a Stellar Signer with the credential of another signer of the account, and submit it. Otherwise, fix the cause and build a new transaction. ${ONLY_ONE_OF_THE_TWO}`,
+		}),
+	],
+	[
+		'tx_bad_auth_extra',
+		() => ({
+			outcome: 'rejected',
+			description:
+				"It carries a signature that the account doesn't use: a key signed it twice, a key that is no longer a signer of the account signed it, or it has more signatures than the account's threshold needs, even if they are all valid. It was not included in the ledger. Sign the unsigned transaction again with only the keys the account needs: it keeps the same hash, so it can't pay twice.",
+		}),
+	],
 	// A rejection, but the transaction may be in a ledger: the network includes a transaction
 	// whose operations fail, charges its fee and uses its sequence number.
 	[
