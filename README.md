@@ -112,14 +112,14 @@ error says which of these happened:
 | `uncertain`     | Horizon gave no final answer, and the node didn't find the transaction when it looked it up: Horizon timed out or answered with a server error, the connection failed, the answer wasn't one of Horizon's, or Horizon rejected the transaction with `tx_bad_seq`. | Look the transaction up by its hash before anything else. For `tx_bad_seq`, compare sequence numbers, as explained below. |
 
 An uncertain result doesn't mean the transaction failed. Unless the error says `tx_bad_seq`, which
-is explained below, the network can still apply the transaction until the time limit it was built
-with, and the error gives that time. Look it up by its hash, for example at
+is explained below, the network can still apply the transaction until the limit it was built with,
+and the error gives it: a time, a ledger number, or both. Look it up by its hash, for example at
 `<Horizon URL>/transactions/<txHash>`. The node already looked for it there, for up to 30 seconds,
 and the error says whether it didn't find it or couldn't look. Not finding a transaction on a
 Horizon server doesn't prove that it wasn't applied: a server can be set up to keep only some
-transactions, or only recent ones. After the time limit, the account's sequence number settles it:
-if it is lower than the transaction's, the transaction was not applied. The error gives the
-transaction's number.
+transactions, or only recent ones. After that limit, the account's sequence number settles it: if it
+is lower than the transaction's, the transaction was not applied. The error gives the transaction's
+number.
 
 Only Horizon's own errors count as `not_submitted`. An error from another server, such as a 401 from
 a provider that didn't accept its key, comes out as `uncertain`, and its description says to check
@@ -144,19 +144,19 @@ answers `tx_bad_seq` when a transaction's number isn't the next one for its acco
 meanings, and Horizon's answer doesn't say which. Compare the account's sequence number, at
 `<Horizon URL>/accounts/<account>`, with the transaction's. If the account's number is lower, the
 transaction is ahead: it can still be applied if it is sent again once the account gets to the
-number before it, until its time limit. If the account's number is equal or higher, the account
-already used that number and this transaction can't be applied anymore. The transaction that used it
-may be the same payment built twice: the account's last transactions are at
+number before it, until its limit. If the account's number is equal or higher, the account already
+used that number and this transaction can't be applied anymore. The transaction that used it may be
+the same payment built twice: the account's last transactions are at
 `<Horizon URL>/accounts/<account>/transactions`.
 
-The result code `tx_too_late` is a rejection: the transaction's time limit passed, or is seconds
-away, and the network no longer takes it. After `tx_bad_seq` or `tx_too_late`, check that the
-payment wasn't already made before you build a new transaction.
+The result code `tx_too_late` is a rejection: the transaction's time limit or ledger limit passed,
+or is seconds away, and the network no longer takes it. After `tx_bad_seq` or `tx_too_late`, check
+that the payment wasn't already made before you build a new transaction.
 
 The result codes `tx_insufficient_fee` and `tx_too_early` are rejections that the same signed
-transaction can get past later: when the network asks for a lower fee, or when its start time comes.
-Send that same transaction again later or build a new one, but not both: if the two are applied, the
-payment is made twice.
+transaction can get past later: when the network asks for a lower fee, or when its start time or
+first ledger comes. Send that same transaction again later or build a new one, but not both: if the
+two are applied, the payment is made twice.
 
 A `tx_failed` transaction may have been included in a ledger as failed. Then its fee was charged,
 its sequence number was used, and Horizon has it under its hash.

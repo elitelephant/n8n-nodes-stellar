@@ -309,7 +309,7 @@ const RESULT_CODES = new Map<
 		'tx_bad_seq',
 		(transaction) => {
 			const expiry = expiryOf(transaction);
-			const when = expiry === undefined ? 'later, because it has no time limit' : `until ${expiry}`;
+			const when = expiry === undefined ? 'later, because it has no time limit' : untilText(expiry);
 			return {
 				outcome: 'uncertain',
 				description: `The transaction's sequence number isn't the next one for its source account. If the number is ahead of the account's, this same transaction can still be applied ${when}, and sending it again is safe. If the account already used that number, this transaction can't be applied anymore, and the one that used it may be this same payment. To know which, compare the account's sequence number on Horizon with this transaction's. Don't build a new one until you know.`,
@@ -320,13 +320,10 @@ const RESULT_CODES = new Map<
 	// the text doesn't say that the transaction expired.
 	[
 		'tx_too_late',
-		(transaction) => {
-			const expiry = expiryOf(transaction);
-			return {
-				outcome: 'rejected',
-				description: `Its time limit${expiry === undefined ? '' : `, ${expiry},`} passed or is seconds away, so the network no longer takes it. Before you build a new one, check that this payment wasn't already made: by this same transaction, if it was sent before, or by another one.`,
-			};
-		},
+		(transaction) => ({
+			outcome: 'rejected',
+			description: `${limitName(expiryOf(transaction))} passed or is seconds away, so the network no longer takes it. Before you build a new one, check that this payment wasn't already made: by this same transaction, if it was sent before, or by another one.`,
+		}),
 	],
 	// Rejections that this same signed transaction can get past later: when the network asks for
 	// a lower fee, or when its start time comes. The network did not take it, so they stay
@@ -344,7 +341,7 @@ const RESULT_CODES = new Map<
 			const start = startOf(transaction);
 			return {
 				outcome: 'rejected',
-				description: `Its start time${start === undefined ? '' : `, ${start},`} hasn't come yet, so it was not included in the ledger. Send this same signed transaction again after that time, or build a new one that can start now. ${ONLY_ONE_OF_THE_TWO}`,
+				description: `${startName(start)} hasn't come yet, so it was not included in the ledger. Send this same signed transaction again after that${start?.ledger === undefined ? ' time' : ''}, or build a new one that can start now. ${ONLY_ONE_OF_THE_TWO}`,
 			};
 		},
 	],
@@ -503,7 +500,7 @@ function uncertain(
 	const until =
 		expiry === undefined
 			? 'It has no time limit, so it can still be applied later. Look it up on Horizon by its hash.'
-			: `It can still be applied until ${expiry}. Look it up on Horizon by its hash. If it isn't there after that time, look at the account's sequence number: if it is lower than ${transaction.sequence}, this transaction was not applied.`;
+			: `It can still be applied ${untilText(expiry)}. Look it up on Horizon by its hash. If it isn't there after that${expiry.ledger === undefined ? ' time' : ''}, look at the account's sequence number: if it is lower than ${transaction.sequence}, this transaction was not applied.`;
 	const from = UNCERTAIN_ANSWERS[answer](host);
 	return {
 		outcome: 'uncertain',
@@ -514,14 +511,62 @@ function uncertain(
 	};
 }
 
-// When the transaction stops being valid, from its time bounds, or undefined if it never does.
-function expiryOf(transaction: Transaction): string | undefined {
-	return utcMinute(transaction.timeBounds?.maxTime);
+// A limit of the transaction: a time, from its time bounds, and a ledger number, from its ledger
+// bounds. The network applies both.
+interface Bound {
+	time?: string;
+	ledger?: number;
 }
 
-// When the transaction starts being valid, from its time bounds, or undefined if it has no start.
-function startOf(transaction: Transaction): string | undefined {
-	return utcMinute(transaction.timeBounds?.minTime);
+// When the transaction stops being valid, or undefined if it never does. The network takes it
+// only before its maxLedger.
+function expiryOf(transaction: Transaction): Bound | undefined {
+	return boundOf(
+		utcMinute(transaction.timeBounds?.maxTime),
+		ledgerNumber(transaction.ledgerBounds?.maxLedger),
+	);
+}
+
+// When the transaction starts being valid, or undefined if it has no start. Its minLedger is the
+// first ledger that can take it.
+function startOf(transaction: Transaction): Bound | undefined {
+	return boundOf(
+		utcMinute(transaction.timeBounds?.minTime),
+		ledgerNumber(transaction.ledgerBounds?.minLedger),
+	);
+}
+
+function boundOf(time: string | undefined, ledger: number | undefined): Bound | undefined {
+	return time === undefined && ledger === undefined ? undefined : { time, ledger };
+}
+
+// "until <time>", "before ledger <n>", or both.
+function untilText(expiry: Bound): string {
+	const parts: string[] = [];
+	if (expiry.time !== undefined) parts.push(`until ${expiry.time}`);
+	if (expiry.ledger !== undefined) parts.push(`before ledger ${expiry.ledger}`);
+	return parts.join(' and ');
+}
+
+// "Its time limit, <time>,", "Its ledger limit, ledger <n>,", or both.
+function limitName(expiry: Bound | undefined): string {
+	const names: string[] = [];
+	if (expiry?.time !== undefined) names.push(`time limit, ${expiry.time},`);
+	if (expiry?.ledger !== undefined) names.push(`ledger limit, ledger ${expiry.ledger},`);
+	return names.length === 0 ? 'Its time limit' : `Its ${names.join(' or its ')}`;
+}
+
+// "Its start time, <time>,", "Its first ledger, <n>,", or both.
+function startName(start: Bound | undefined): string {
+	const names: string[] = [];
+	if (start?.time !== undefined) names.push(`start time, ${start.time},`);
+	if (start?.ledger !== undefined) names.push(`first ledger, ${start.ledger},`);
+	return names.length === 0 ? 'Its start time' : `Its ${names.join(' or its ')}`;
+}
+
+// A ledger bound. Zero means the bound isn't set.
+function ledgerNumber(value: number | undefined): number | undefined {
+	return Number.isSafeInteger(value) && (value as number) > 0 ? value : undefined;
 }
 
 // A time bound, in seconds since 1970, as a date and time in UTC. Zero means the bound isn't set.
