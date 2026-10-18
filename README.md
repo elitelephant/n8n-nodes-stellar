@@ -133,8 +133,9 @@ once. There are two ways to do it:
 - Send `signedXdr` to Horizon yourself, for example with an **HTTP Request** node that posts it as
   the `tx` form field to `<Horizon URL>/transactions`.
 
-Don't pass `signedXdr` through the Stellar Signer: it would sign it a second time, and the network
-rejects a repeated signature.
+Passing `signedXdr` through a Stellar Signer with the same credential fails the item before it is
+signed: a second signature of the same key makes the network reject the transaction. Use one of the
+two ways above.
 
 What can pay twice is a **new** transaction for the same payment, which has another hash. Don't
 build one until you know that the first wasn't applied.
@@ -307,9 +308,12 @@ result:
 3. The next node reads the signed transaction with `{{ $json.signedXdr }}`. To send it to the
    network from this node instead, turn on **Submit to Horizon** and read `{{ $json.ledger }}`.
 
-Sign each transaction only once with the same key. If the same XDR goes through the Stellar Signer
-twice with the same key, it carries a repeated signature, and the network rejects it with
-`tx_bad_auth_extra`.
+To co-sign a transaction of an account that needs several signatures, pass `signedXdr` through
+another Stellar Signer with the credential of the next signer. Each key signs once: if the XDR
+already has a valid signature of the credential's key, the item fails before it is signed, because
+the network rejects a repeated signature with `tx_bad_auth_extra`. The network also rejects a
+signature that the account doesn't need: once the signatures reach the account's threshold, one
+more, even a valid one, gets `tx_bad_auth_extra`.
 
 ## Resources
 

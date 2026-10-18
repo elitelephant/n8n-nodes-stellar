@@ -109,6 +109,9 @@ actual node.
   - the `networkName` field of each input item (`public` or `testnet`), which must be the same as
     the `network` parameter: the node fails the item without signing it when the field is missing or
     different
+  - an XDR that already has a valid signature of the credential's key fails the item before it is
+    signed, because the network rejects a repeated signature. A signature of another key is
+    co-signing, and the node adds its own
   - the output fields `signedXdr`, `txHash`, `publicKey`, `network` and `networkName` (`public` or
     `testnet`)
   - the optional parameters `submit`, off by default, and `horizonUrl`, which n8n shows only when

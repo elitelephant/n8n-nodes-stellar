@@ -288,6 +288,7 @@ export class StellarSigner implements INodeType {
 
 				const keypair = keypairFromSecret(node, secretKey, itemIndex);
 				const transaction = parseTransaction(node, transactionXdr, networkPassphrase, itemIndex);
+				checkNotSignedByKey(node, transaction, keypair, itemIndex);
 				// The credential's policy is checked on the decoded transaction, before it is
 				// signed and before any request to the network.
 				const violation = checkPolicy(policy, transaction);
@@ -649,6 +650,37 @@ function parseTransaction(
 			itemIndex,
 			message: `'Transaction XDR' ${problem}`,
 			description: fix,
+		});
+	}
+}
+
+// A second signature of the same key makes the network reject the transaction with
+// tx_bad_auth_extra, so an XDR that already has a valid one fails here, unsigned. A signature of
+// another key is someone co-signing, and goes on.
+function checkNotSignedByKey(
+	node: INode,
+	transaction: Transaction,
+	keypair: Keypair,
+	itemIndex: number,
+): void {
+	const hint = Buffer.from(keypair.signatureHint());
+	const hash = transaction.hash();
+	const alreadySigned = transaction.signatures.some((signature) => {
+		if (!hint.equals(Buffer.from(signature.hint.toXdrObject()))) {
+			return false;
+		}
+		try {
+			return keypair.verify(hash, signature.signature);
+		} catch {
+			// A signature of the wrong length can't be this key's.
+			return false;
+		}
+	});
+	if (alreadySigned) {
+		throw new NodeOperationError(node, "'Transaction XDR' already has this wallet's signature", {
+			itemIndex,
+			description:
+				"The transaction already carries a signature of this credential's key. A second one makes the network reject it with tx_bad_auth_extra, so nothing was signed. To send it again, pass the unsigned transaction to this node, or send the signed one to Horizon yourself. To add another signer's signature, use that signer's credential.",
 		});
 	}
 }
