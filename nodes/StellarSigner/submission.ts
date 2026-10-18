@@ -300,6 +300,17 @@ const ONLY_ONE_OF_THE_TWO =
 // account that signs the fee bump. The node doesn't sign fee bumps, so it is built outside.
 const FEE_BUMP = 'wrap it in a fee bump transaction';
 
+// The transaction asks for a minimum time or number of ledgers since its account's sequence number
+// last changed, and it can get in once they pass.
+function minimumWaitRejection(
+	transaction: Transaction,
+): Pick<SubmissionFailure, 'outcome' | 'description'> {
+	return {
+		outcome: 'rejected',
+		description: `It can't be applied yet: it asks that ${minimumWait(transaction)} pass after its source account's sequence number last changed. It was not included in the ledger. Send this same signed transaction again once that has passed, or build a new one without that condition. ${ONLY_ONE_OF_THE_TWO}`,
+	};
+}
+
 // The transaction result codes that get an outcome or a description of their own. Any other code
 // is a plain rejection. A Map, because the code comes from the server's answer.
 const RESULT_CODES = new Map<
@@ -359,15 +370,10 @@ const RESULT_CODES = new Map<
 			description: `Its source account can't pay its fee, ${transaction.fee} stroops, without going below the account's minimum balance. It was not included in the ledger. Send XLM to the account and send this same signed transaction again, or ${FEE_BUMP} paid by another account, built and signed outside this node, for example with the Stellar SDK. Neither can pay twice. Don't build a new transaction for this payment while this one can still be applied: if both are applied, the payment is made twice.`,
 		}),
 	],
-	// Horizon's name for txBAD_MIN_SEQ_AGE_OR_GAP: the transaction asks for a minimum time or number
-	// of ledgers since its account's sequence number last changed, and it can get in once they pass.
-	[
-		'tx_bad_minseq_age_or_gap',
-		(transaction) => ({
-			outcome: 'rejected',
-			description: `It can't be applied yet: it asks that ${minimumWait(transaction)} pass after its source account's sequence number last changed. It was not included in the ledger. Send this same signed transaction again once that has passed, or build a new one without that condition. ${ONLY_ONE_OF_THE_TWO}`,
-		}),
-	],
+	// txBAD_MIN_SEQ_AGE_OR_GAP. Horizon's code says tx_bad_minseq_age_or_gap, and the SDK's list of
+	// codes says tx_bad_min_seq_age_or_gap, so both are read.
+	['tx_bad_minseq_age_or_gap', minimumWaitRejection],
+	['tx_bad_min_seq_age_or_gap', minimumWaitRejection],
 	// Rejections for the signatures. tx_bad_auth also comes from too little signature weight, and
 	// then this same signed transaction can still get in with another signer's signature. With
 	// tx_bad_auth_extra it can't: signing the unsigned transaction again keeps its hash.
