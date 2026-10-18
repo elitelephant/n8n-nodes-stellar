@@ -162,6 +162,13 @@ outside this node, for example with the Stellar SDK, by the account that pays th
 sign the inner transaction again or change its sequence number, so, like sending it again, it can't
 pay twice, and it works only while the inner transaction is within its limits.
 
+The result codes `tx_insufficient_balance` and `tx_bad_minseq_age_or_gap` are rejections that the
+same signed transaction can get past too. The first means that the account can't pay the fee without
+going below its minimum balance: send the account XLM and send the same transaction again, or wrap
+it in a fee bump paid by another account. The second means that the transaction asks for a minimum
+time or number of ledgers after its account's sequence number last changed: send it again once that
+has passed. Don't build a new transaction for the same payment while this one can still be applied.
+
 The result code `tx_bad_auth` is a rejection for the signatures. When the account needs more
 signature weight than the transaction carries, the same signed transaction can still be applied:
 pass `signedXdr` through a Stellar Signer with the credential of another signer of the account, and

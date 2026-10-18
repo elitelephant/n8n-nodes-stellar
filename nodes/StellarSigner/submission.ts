@@ -350,6 +350,24 @@ const RESULT_CODES = new Map<
 			};
 		},
 	],
+	// The account can't pay the fee without going below its minimum balance. XLM sent to the
+	// account, or a fee bump paid by another account, gets this same signed transaction in.
+	[
+		'tx_insufficient_balance',
+		(transaction) => ({
+			outcome: 'rejected',
+			description: `Its source account can't pay its fee, ${transaction.fee} stroops, without going below the account's minimum balance. It was not included in the ledger. Send XLM to the account and send this same signed transaction again, or ${FEE_BUMP} paid by another account, built and signed outside this node, for example with the Stellar SDK. Neither can pay twice. Don't build a new transaction for this payment while this one can still be applied: if both are applied, the payment is made twice.`,
+		}),
+	],
+	// Horizon's name for txBAD_MIN_SEQ_AGE_OR_GAP: the transaction asks for a minimum time or number
+	// of ledgers since its account's sequence number last changed, and it can get in once they pass.
+	[
+		'tx_bad_minseq_age_or_gap',
+		(transaction) => ({
+			outcome: 'rejected',
+			description: `It can't be applied yet: it asks that ${minimumWait(transaction)} pass after its source account's sequence number last changed. It was not included in the ledger. Send this same signed transaction again once that has passed, or build a new one without that condition. ${ONLY_ONE_OF_THE_TWO}`,
+		}),
+	],
 	// Rejections for the signatures. tx_bad_auth also comes from too little signature weight, and
 	// then this same signed transaction can still get in with another signer's signature. With
 	// tx_bad_auth_extra it can't: signing the unsigned transaction again keeps its hash.
@@ -585,6 +603,20 @@ function startName(start: Bound | undefined): string {
 	if (start?.time !== undefined) names.push(`start time, ${start.time},`);
 	if (start?.ledger !== undefined) names.push(`first ledger, ${start.ledger},`);
 	return names.length === 0 ? 'Its start time' : `Its ${names.join(' or its ')}`;
+}
+
+// The wait that the transaction's minimum sequence age and ledger gap ask for.
+function minimumWait(transaction: Transaction): string {
+	const parts: string[] = [];
+	const seconds = transaction.minAccountSequenceAge;
+	if (seconds !== undefined && seconds > BigInt(0)) {
+		parts.push(`${seconds} second${seconds === BigInt(1) ? '' : 's'}`);
+	}
+	const ledgers = transaction.minAccountSequenceLedgerGap ?? 0;
+	if (ledgers > 0) {
+		parts.push(`${ledgers} ledger${ledgers === 1 ? '' : 's'}`);
+	}
+	return parts.length === 0 ? 'a minimum time or number of ledgers' : parts.join(' and ');
 }
 
 // A ledger bound. Zero means the bound isn't set.
