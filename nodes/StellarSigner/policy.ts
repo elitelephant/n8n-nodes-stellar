@@ -286,6 +286,16 @@ export interface PolicyViolation {
 	description: string;
 }
 
+// A contract call's fee also carries the resource fee, which comes from its simulation, so building
+// the transaction with a lower fee may not be enough.
+function howToLowerTheFee(transaction: Transaction): string {
+	const { ext } = transaction.tx;
+	if (ext.type !== 'sorobanData') {
+		return 'Build the transaction with a lower fee, or raise the limit in the credential.';
+	}
+	return `It includes a resource fee of ${ext.sorobanData.resourceFee} stroops, which comes from the contract call's simulation: raise the limit in the credential, or lower the inclusion fee if that is enough.`;
+}
+
 // Returns the first thing in the transaction that the policy doesn't allow. It checks every
 // operation, whatever its source account: a signature counts for the whole transaction.
 export function checkPolicy(policy: Policy, transaction: Transaction): PolicyViolation | undefined {
@@ -298,7 +308,7 @@ export function checkPolicy(policy: Policy, transaction: Transaction): PolicyVio
 			const field = LABELS.maxFee;
 			return {
 				message: `The transaction's fee is over '${field}'`,
-				description: `The transaction's fee is ${transaction.fee} stroops. '${field}' ${IN_CREDENTIAL} allows up to ${maxFee}. ${NOT_SIGNED} Build the transaction with a lower fee, or raise the limit in the credential.`,
+				description: `The transaction's fee is ${transaction.fee} stroops. '${field}' ${IN_CREDENTIAL} allows up to ${maxFee}. ${NOT_SIGNED} ${howToLowerTheFee(transaction)}`,
 			};
 		}
 	}
