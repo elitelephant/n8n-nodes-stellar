@@ -7,6 +7,7 @@ import {
 	NotFoundError,
 	type Transaction,
 	TransactionFailedError,
+	xdr,
 } from '@stellar/stellar-sdk';
 
 import { horizonUrlFor, type NetworkName } from '../shared/network';
@@ -322,7 +323,10 @@ function minimumWaitRejection(
 // is a plain rejection. A Map, because the code comes from the server's answer.
 const RESULT_CODES = new Map<
 	string,
-	(transaction: Transaction) => Pick<SubmissionFailure, 'outcome' | 'description'>
+	(
+		transaction: Transaction,
+		answer: RejectionAnswer,
+	) => Pick<SubmissionFailure, 'outcome' | 'description'>
 >([
 	// Not final. Horizon answers it for a number that is ahead of the account's, and that same
 	// signed transaction is applied if it is sent again once the account gets there. Horizon
@@ -353,9 +357,9 @@ const RESULT_CODES = new Map<
 	// together with this one. For tx_insufficient_fee, a fee bump is one more way.
 	[
 		'tx_insufficient_fee',
-		(transaction) => ({
+		(transaction, answer) => ({
 			outcome: 'rejected',
-			description: `Its fee, ${transaction.fee} stroops, is too small: lower than the network's minimum, or lower than what other transactions are offering while the network is busy. It was not included in the ledger. Send this same signed transaction again later if the network was busy, or ${FEE_BUMP} with a higher fee, built and signed outside this node by the account that pays the fee, for example with the Stellar SDK. Neither can pay twice. Building a new transaction with a higher fee also works, but then don't send this one again: if both are applied, the payment is made twice.`,
+			description: `${feeTooSmall(transaction)}${answer.feeCharged === undefined ? '' : ` Horizon's answer asks for at least ${answer.feeCharged} stroops.`} It was not included in the ledger. Send this same signed transaction again later if the network was busy, or ${FEE_BUMP} with a higher fee, built and signed outside this node by the account that pays the fee, for example with the Stellar SDK. Neither can pay twice. Building a new transaction with a higher fee also works, but then don't send this one again: if both are applied, the payment is made twice.`,
 		}),
 	],
 	[
@@ -427,7 +431,9 @@ function failureFrom(
 			const operations = Array.isArray(codes.operations)
 				? codes.operations.filter((code) => typeof code === 'string')
 				: [];
-			const known = RESULT_CODES.get(codes.transaction)?.(transaction);
+			const known = RESULT_CODES.get(codes.transaction)?.(transaction, {
+				feeCharged: feeChargedIn(response?.data),
+			});
 			const named = `${codes.transaction}${operations.length === 0 ? '' : ` (${operations.join(', ')})`}`;
 			return {
 				outcome: known?.outcome ?? 'rejected',
@@ -616,6 +622,42 @@ function startName(start: Bound | undefined): string {
 	if (start?.time !== undefined) names.push(`start time, ${start.time},`);
 	if (start?.ledger !== undefined) names.push(`first ledger, ${start.ledger},`);
 	return names.length === 0 ? 'Its start time' : `Its ${names.join(' or its ')}`;
+}
+
+// What Horizon's rejection says besides its codes.
+interface RejectionAnswer {
+	// The result's feeCharged. For txINSUFFICIENT_FEE, stellar-core puts there the fee the network
+	// asks for.
+	feeCharged?: bigint;
+}
+
+// The feeCharged of the result_xdr that Horizon sends with a rejection, when it can be read and is
+// above zero.
+function feeChargedIn(body: unknown): bigint | undefined {
+	const extras = isRecord(body) && isRecord(body.extras) ? body.extras : undefined;
+	if (typeof extras?.result_xdr !== 'string') {
+		return undefined;
+	}
+	try {
+		const { feeCharged } = xdr.TransactionResult.fromXdr(extras.result_xdr, 'base64');
+		return feeCharged > BigInt(0) ? feeCharged : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+// The first sentence of tx_insufficient_fee. For a contract call, the total fee also carries the
+// resource fee, and what competes to get in is the inclusion fee: the total minus the resource fee.
+function feeTooSmall(transaction: Transaction): string {
+	const busy =
+		"is too small: lower than the network's minimum, or lower than what other transactions are offering while the network is busy.";
+	const { ext } = transaction.tx;
+	if (ext.type !== 'sorobanData') {
+		return `Its fee, ${transaction.fee} stroops, ${busy}`;
+	}
+	const { resourceFee } = ext.sorobanData;
+	const inclusionFee = BigInt(transaction.fee) - resourceFee;
+	return `Its inclusion fee, ${inclusionFee} stroops, ${busy} Its total fee, ${transaction.fee} stroops, also carries a resource fee of ${resourceFee} stroops, which comes from the simulation and doesn't compete for inclusion.`;
 }
 
 // The wait that the transaction's minimum sequence age and ledger gap ask for.
