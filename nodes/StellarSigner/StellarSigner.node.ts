@@ -86,7 +86,8 @@ export class StellarSigner implements INodeType {
 						operation: ['signTransaction'],
 					},
 				},
-				description: 'The unsigned transaction XDR to sign',
+				description:
+					"The transaction XDR to sign, in base64. It can already carry other signers' signatures, to co-sign it.",
 			},
 			{
 				displayName: 'Network',

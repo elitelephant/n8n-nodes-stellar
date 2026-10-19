@@ -37,7 +37,8 @@ A workflow saved before the **Operation** parameter existed signs transactions, 
 
 Parameters:
 
-- **Transaction XDR** (`xdr`): the unsigned transaction, as base64 XDR.
+- **Transaction XDR** (`xdr`): the transaction to sign, as base64 XDR. It can already carry other
+  signers' signatures, to co-sign it (see [Usage](#usage)).
 - **Network** (`network`): Public (`public`) or Testnet (`testnet`). The transaction is signed for
   this network.
 - **Submit to Horizon** (`submit`): off by default. When it is on, the node submits the transaction
