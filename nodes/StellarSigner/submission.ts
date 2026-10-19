@@ -281,7 +281,7 @@ function includedAsFailed(txHash: string, ledger: number): SubmissionFailure {
 		outcome: 'rejected',
 		message: `Transaction ${txHash} is in ledger ${ledger} as failed`,
 		description:
-			'Horizon gave no result when the node sent it, so the node looked it up: the network included it as failed. Its operations had no effect, its fee was charged and its sequence number was used. Build a new transaction for this payment.',
+			'Horizon gave no final result when the node sent it, so the node looked it up: the network included it as failed. Its operations had no effect, its fee was charged and its sequence number was used. Build a new transaction for this payment.',
 	};
 }
 
@@ -298,6 +298,11 @@ const RESULT_CODES_URL =
 const ONLY_ONE_OF_THE_TWO =
 	'Do only one of the two: if this one and a new one are both applied, the payment is made twice.';
 
+// The network usually rejects these codes before a ledger, but it checks a transaction again when
+// it applies it, after it took the fee, so a rare one is in a ledger as failed.
+const USUALLY_NOT_INCLUDED =
+	"Usually it wasn't included in the ledger. If it is on Horizon under its hash, the network included it as failed and charged its fee.";
+
 // A fee bump wraps the signed transaction without signing it again and pays its fee from the
 // account that signs the fee bump. The node doesn't sign fee bumps, so it is built outside.
 const FEE_BUMP = 'wrap it in a fee bump transaction';
@@ -309,7 +314,7 @@ function minimumWaitRejection(
 ): Pick<SubmissionFailure, 'outcome' | 'description'> {
 	return {
 		outcome: 'rejected',
-		description: `It can't be applied yet: it asks that ${minimumWait(transaction)} pass after its source account's sequence number last changed. It was not included in the ledger. Send this same signed transaction again once that has passed, or build a new one without that condition. ${ONLY_ONE_OF_THE_TWO}`,
+		description: `It can't be applied yet: it asks that ${minimumWait(transaction)} pass after its source account's sequence number last changed. ${USUALLY_NOT_INCLUDED} Send this same signed transaction again once that has passed, or build a new one without that condition. ${ONLY_ONE_OF_THE_TWO}`,
 	};
 }
 
@@ -329,7 +334,7 @@ const RESULT_CODES = new Map<
 			const when = expiry === undefined ? 'later, because it has no time limit' : untilText(expiry);
 			return {
 				outcome: 'uncertain',
-				description: `The transaction's sequence number isn't the next one for its source account. If the number is ahead of the account's, this same transaction can still be applied ${when}, and sending it again is safe. If the account already used that number, this transaction can't be applied anymore, and the one that used it may be this same payment. To know which, compare the account's sequence number on Horizon with this transaction's. Don't build a new one until you know.`,
+				description: `The transaction's sequence number isn't the next one for its source account. If the number is ahead of the account's, this same transaction can still be applied ${when}, and sending it again is safe. If the account already used that number, this transaction can't be applied anymore, and the one that used it may be this same payment. To know which, compare the account's sequence number on Horizon with this transaction's, ${transaction.sequence}. Don't build a new one until you know.`,
 			};
 		},
 	],
@@ -369,7 +374,7 @@ const RESULT_CODES = new Map<
 		'tx_insufficient_balance',
 		(transaction) => ({
 			outcome: 'rejected',
-			description: `Its source account can't pay its fee, ${transaction.fee} stroops, without going below the account's minimum balance. It was not included in the ledger. Send XLM to the account and send this same signed transaction again, or ${FEE_BUMP} paid by another account, built and signed outside this node, for example with the Stellar SDK. Neither can pay twice. Don't build a new transaction for this payment while this one can still be applied: if both are applied, the payment is made twice.`,
+			description: `Its source account can't pay its fee, ${transaction.fee} stroops, without going below the account's minimum balance. ${USUALLY_NOT_INCLUDED} Send XLM to the account and send this same signed transaction again, or ${FEE_BUMP} paid by another account, built and signed outside this node, for example with the Stellar SDK. Neither can pay twice. Don't build a new transaction for this payment while this one can still be applied: if both are applied, the payment is made twice.`,
 		}),
 	],
 	// txBAD_MIN_SEQ_AGE_OR_GAP. Horizon's code says tx_bad_minseq_age_or_gap, and the SDK's list of
@@ -383,15 +388,14 @@ const RESULT_CODES = new Map<
 		'tx_bad_auth',
 		() => ({
 			outcome: 'rejected',
-			description: `Its signatures don't authorize it: they don't add up to the weight the account requires, a key isn't a signer of the account, or they were made for another network than this Horizon server's. It was not included in the ledger, so no fee was charged and the account's sequence number didn't change. If the account needs more signatures, this same signed transaction can still be applied: pass the signedXdr output through a Stellar Signer with the credential of another signer of the account, and submit it. Otherwise, fix the cause and build a new transaction. ${ONLY_ONE_OF_THE_TWO}`,
+			description: `Its signatures don't authorize it: they don't add up to the weight that an account of the transaction requires, a key isn't a signer of that account, or they were made for another network than this Horizon server's. Usually it wasn't included in the ledger, so no fee was charged and the account's sequence number didn't change. If it is on Horizon under its hash, the network included it as failed and charged its fee. If an account needs more signatures, this same signed transaction can still be applied: pass the signedXdr output through a Stellar Signer with the credential of another signer of the account, and submit it. Otherwise, fix the cause and build a new transaction. ${ONLY_ONE_OF_THE_TWO}`,
 		}),
 	],
 	[
 		'tx_bad_auth_extra',
 		() => ({
 			outcome: 'rejected',
-			description:
-				"It carries a signature that the account doesn't use: a key signed it twice, a key that is no longer a signer of the account signed it, or it has more signatures than the account's threshold needs, even if they are all valid. It was not included in the ledger. Sign the unsigned transaction again with only the keys the account needs: it keeps the same hash, so it can't pay twice.",
+			description: `It carries a signature that the account doesn't use: a key signed it twice, a key that is no longer a signer of the account signed it, or it has more signatures than the account's threshold needs, even if they are all valid. ${USUALLY_NOT_INCLUDED} Sign the unsigned transaction again with only the keys the account needs: it keeps the same hash, so it can't pay twice.`,
 		}),
 	],
 	// A rejection, but the transaction may be in a ledger: the network includes a transaction
