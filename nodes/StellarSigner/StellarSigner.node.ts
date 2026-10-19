@@ -139,7 +139,7 @@ export class StellarSigner implements INodeType {
 					},
 				},
 				description:
-					"The Horizon server to submit to, as an https address. Plain http works only for localhost, and the address can't have a user name or a password. Leave empty to use SDF's server for the network: horizon-testnet.stellar.org for testnet and horizon.stellar.org for public. Stellar's documentation no longer lists the public server, so enter your provider's address if it stops answering.",
+					"The Horizon server to submit to, as an https address. Plain http works only for localhost, and the address can't have a user name or a password. Leave empty to use SDF's server for the network: horizon-testnet.stellar.org for testnet and horizon.stellar.org for public. Stellar's Horizon page names SDF's testnet server but not the public one, so enter your provider's address if it stops answering.",
 			},
 			{
 				displayName: 'Message',

@@ -45,7 +45,7 @@ export class StellarWalletApi implements ICredentialType {
 			default: '',
 			placeholder: 'e.g. XLM=100',
 			description:
-				'The highest amount of each asset that one operation may send, one per line, as XLM=100 or CODE:ISSUER=100, where ISSUER is the address of the account that issues the asset. XLM can also be written native. While any limit is set, a payment that sends an asset without a line fails. Leave empty for no limits.',
+				'The highest amount of each asset that one payment operation (payment, path payment or createAccount) may send, one per line, as XLM=100 or CODE:ISSUER=100, where ISSUER is the address of the account that issues the asset. XLM can also be written native. While any limit is set, a payment that sends an asset without a line fails. Leave empty for no limits.',
 		},
 		{
 			displayName: 'Allowed Assets',
@@ -81,7 +81,7 @@ export class StellarWalletApi implements ICredentialType {
 			},
 			default: 0,
 			description:
-				"The highest fee that a transaction may carry, in stroops: 1 XLM is 10,000,000 stroops. It is the transaction's total fee, for all its operations. 0 means no limit.",
+				"The highest fee that a transaction may carry, in stroops: 1 XLM is 10,000,000 stroops. It is the transaction's total fee, for all its operations, and for a contract call it includes the resource fee. 0 means no limit.",
 		},
 		{
 			displayName: 'Allow Message Signing',
