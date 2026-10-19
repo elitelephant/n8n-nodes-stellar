@@ -633,12 +633,15 @@ function ledgerNumber(value: number | undefined): number | undefined {
 }
 
 // A time bound, in seconds since 1970, as a date and time in UTC. Zero means the bound isn't set.
+// The minute is rounded up: the network still takes a transaction until its maxTime, so a time
+// limit shown earlier than it is would make the texts conclude too soon that it wasn't applied.
 function utcMinute(timeBound: string | undefined): string | undefined {
 	const seconds = Number(timeBound ?? 0);
 	if (!Number.isFinite(seconds) || seconds <= 0) {
 		return undefined;
 	}
-	return `${new Date(seconds * 1000).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+	const minutes = Math.ceil(seconds / 60);
+	return `${new Date(minutes * 60 * 1000).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
 }
 
 // The name of a Horizon error, such as transaction_malformed, or undefined if the body isn't one
