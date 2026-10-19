@@ -88,13 +88,15 @@ their own switch.
   services accept such a proof, for example as a login. The node signs whatever text it receives, so
   turn it on only for a workflow that controls what that text says.
 
-**Maximum Amounts**, **Allowed Assets** and **Allowed Destinations** can only be checked on those
-four payment operations. While any of them is set and **Allowed Operations** is empty, the node
-signs only those four types and fails any other operation, such as an `accountMerge`, an offer, a
-liquidity pool operation or a Soroban contract call. To sign another type with the same credential,
-list it in **Allowed Operations** together with the payment types. The node then signs it without
-looking at its amounts, assets or destinations, so an `accountMerge` in that list can send the whole
-balance to any account. Only the list of types covers offers, liquidity pools and Soroban.
+The node checks **Maximum Amounts**, **Allowed Assets** and **Allowed Destinations** only on those
+four payment operations. Other operations, such as an `accountMerge` or a `createClaimableBalance`,
+can also move funds, but the node doesn't read them. While any of them is set and **Allowed
+Operations** is empty, the node signs only those four types and fails any other operation, such as
+an `accountMerge`, an offer, a liquidity pool operation or a Soroban contract call. To sign another
+type with the same credential, list it in **Allowed Operations** together with the payment types.
+The node then signs it without looking at its amounts, assets or destinations, so an `accountMerge`
+in that list can send the whole balance to any account. Only the list of types covers offers,
+liquidity pools and Soroban.
 
 `invokeHostFunction` calls a Soroban smart contract, and the node doesn't look at what the call
 does. When the contract asks this account to authorize the call and the account is the source of the

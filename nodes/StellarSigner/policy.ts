@@ -61,7 +61,7 @@ const KNOWN_OPERATION_TYPES: Record<OperationType, true> = {
 const OPERATION_TYPES = Object.keys(KNOWN_OPERATION_TYPES);
 
 // The names of the operations that pay someone, for the error text. They are the ones outflowOf
-// reads, and the only ones the limits on amounts, assets and destinations can be checked against.
+// reads, and the only ones this node checks the limits on amounts, assets and destinations on.
 const PAYMENT_TYPES = [
 	'payment',
 	'pathPaymentStrictSend',
@@ -335,7 +335,7 @@ function checkOperation(
 		// What can't be checked against the limits isn't signed, unless the credential names it.
 		return {
 			message: `This credential signs only payments, and operation ${operationNumber} is ${type}`,
-			description: `The Stellar Wallet API credential has limits on amounts, destinations or assets, and only ${listOf(PAYMENT_TYPES)} operations can be checked against them. ${NOT_SIGNED} To sign ${type} with this credential, list it in '${LABELS.allowedOperations}' together with the payment types it should sign.`,
+			description: `The Stellar Wallet API credential has limits on amounts, destinations or assets, and this node checks them only on ${listOf(PAYMENT_TYPES)} operations. ${NOT_SIGNED} To sign ${type} with this credential, list it in '${LABELS.allowedOperations}' together with the payment types it should sign.`,
 		};
 	}
 
@@ -406,7 +406,7 @@ function checkOperation(
 	return undefined;
 }
 
-// Whether the policy has a limit that only payment operations can be checked against.
+// Whether the policy has a limit that this node checks only on payment operations.
 function limitsPayments(policy: Policy): boolean {
 	return (
 		policy.maxAmounts !== undefined ||
