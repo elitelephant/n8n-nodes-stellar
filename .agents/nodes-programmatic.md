@@ -68,10 +68,13 @@ async execute(
 - Always get input items via `this.getInputData()`
 - Pass the correct item index as the second argument to `getNodeParameter`
 - Handle errors using `NodeApiError` (for API failures) and `NodeOperationError` (for
-  operational/validation errors)
-- Support `continueOnFail()` to allow workflows to proceed when possible. The failed item keeps its
-  input's data, plus its error and its `pairedItem`, as the Stellar Signer does for an item that
-  fails before it is signed
+  operational/validation errors). The Stellar Signer throws `NodeOperationError` for Horizon's
+  answers too, on purpose: each outcome has its own message, and `NodeApiError` replaces a message
+  with a generic one when the HTTP status or the error's code is a common one
+  (`setDescriptiveErrorMessage` in `n8n-workflow`)
+- Support `continueOnFail()` to allow workflows to proceed when possible. Return the failed item
+  with its input's `json`, its error and its `pairedItem`, as the Stellar Signer does for an item
+  that fails before it is signed. n8n then shows only the error's message, as the next point says
 - n8n replaces the `json` of an item that has the `error` property with the error's message. To give
   a failed item fields of its own, as the Stellar Signer does for an item that fails after it was
   signed, return it without that property, with `error` as the only key of its `json` and

@@ -94,9 +94,14 @@ actual node.
 - Don't break this contract, which existing workflows depend on:
   - the node type and version above
   - the credential name and its `secretKey` field
-  - the credential's optional policy fields, which limit what the node signs and mean no limit when
-    they are empty, or 0 for `maxFee`, as in a credential saved before they existed:
-    `allowedOperations`, `maxAmounts`, `allowedAssets`, `allowedDestinations` and `maxFee`
+  - the credential's optional policy fields, `allowedOperations`, `maxAmounts`, `allowedAssets`,
+    `allowedDestinations` and `maxFee`. With all of them empty, and `maxFee` at 0, there is no
+    limit, as in a credential saved before they existed. While `maxAmounts`, `allowedAssets` or
+    `allowedDestinations` has a line, an empty `allowedOperations` means only the four payment types
+    (`payment`, `pathPaymentStrictSend`, `pathPaymentStrictReceive` and `createAccount`). While
+    `maxAmounts` has a line, a payment in an asset without a line fails. A `G` destination also
+    allows its muxed `M` addresses, and an `M` destination allows only itself. The native asset is
+    written `XLM` or `native`
   - the credential's `allowMessageSigning` switch, off by default: Sign Message fails unless it is
     on
   - the `operation` parameter, with `signTransaction` as the default, which n8n does not save in the
@@ -122,8 +127,9 @@ actual node.
   - the `error` object of an item that fails after it was signed, when the node continues on fail:
     `message`, `description`, `outcome` (`rejected`, `not_submitted` or `uncertain`), `txHash` and
     `signedXdr`. An item that fails before it is signed keeps n8n's usual shape
-  - how a submission is judged: submitted only for a 200 with the same hash, a ledger above 0 and
-    `successful`; `rejected` only for Horizon's `transaction_failed` with a failure code;
+  - how a submission is judged: submitted for a 200 with the same hash, a ledger above 0 and
+    `successful`, or when the look-up below finds the transaction successful; `rejected` for
+    Horizon's `transaction_failed` with a failure code, or when the look-up finds it failed;
     `not_submitted` only for the errors Horizon answers before it passes a transaction on, told by
     their `type`; anything else is `uncertain`, and then the node looks the transaction up by its
     hash, at once and every 5 seconds for up to 30 seconds. Not finding it doesn't prove that it
