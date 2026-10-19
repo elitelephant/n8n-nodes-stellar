@@ -85,9 +85,9 @@ their own switch.
 
 - **Maximum Fee**: the highest fee, in stroops, that a transaction may carry. One XLM is 10,000,000
   stroops. It is the transaction's total fee, for all its operations: the most the account agrees to
-  pay, which can be more than what the network ends up charging. For a Soroban contract call it also
-  includes the resource fee, which comes from the call's simulation. `0`, the default, means no
-  limit.
+  pay, which can be more than what the network ends up charging. For a Soroban transaction, such as
+  a contract call, it also includes the resource fee, which comes from the call's simulation. `0`,
+  the default, means no limit.
 
 - **Allow Message Signing**: whether the node may sign messages with this key, with its **Sign
   Message** operation. It is off by default, and Sign Message fails while it is off. Leave it off

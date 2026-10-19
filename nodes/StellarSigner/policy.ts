@@ -7,6 +7,8 @@ import {
 	type Transaction,
 } from '@stellar/stellar-sdk';
 
+import { resourceFeeOf } from '../shared/fees';
+
 // The signing policy: the limits that the Stellar Wallet API credential puts on what the node
 // signs. This module doesn't depend on n8n. It reads the credential's fields and checks a decoded
 // transaction against them.
@@ -286,14 +288,14 @@ export interface PolicyViolation {
 	description: string;
 }
 
-// A contract call's fee also carries the resource fee, which comes from its simulation, so building
-// the transaction with a lower fee may not be enough.
+// A Soroban transaction's fee also carries the resource fee, which comes from its simulation, so
+// building the transaction with a lower fee may not be enough.
 function howToLowerTheFee(transaction: Transaction): string {
-	const { ext } = transaction.tx;
-	if (ext.type !== 'sorobanData') {
+	const resourceFee = resourceFeeOf(transaction);
+	if (resourceFee === undefined) {
 		return 'Build the transaction with a lower fee, or raise the limit in the credential.';
 	}
-	return `It includes a resource fee of ${ext.sorobanData.resourceFee} stroops, which comes from the contract call's simulation: raise the limit in the credential, or lower the inclusion fee if that is enough.`;
+	return `It includes a resource fee of ${resourceFee} stroops, which comes from the Soroban transaction's simulation: raise the limit in the credential, or lower the inclusion fee if that is enough.`;
 }
 
 // Returns the first thing in the transaction that the policy doesn't allow. It checks every
@@ -426,7 +428,7 @@ function limitsPayments(policy: Policy): boolean {
 	);
 }
 
-// What a payment operation takes out of the account, and where it goes.
+// What a payment operation sends from its source account, and where it goes.
 interface Outflow {
 	// As the SDK gives it: a decimal with 7 digits.
 	amount: string;

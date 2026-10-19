@@ -176,15 +176,15 @@ account. The second means that the transaction asks for a minimum time or number
 its account's sequence number last changed: send it again once that has passed. Don't build a new
 transaction for the same payment while this one can still be applied.
 
-The result code `tx_bad_auth` is a rejection for the signatures. When the account needs more
-signature weight than the transaction carries, the same signed transaction can still be applied:
-pass `signedXdr` through a Stellar Signer with the credential of another signer of the account, and
-submit it. The code also comes from a key that isn't a signer of the account, or from signatures
-made for another network than the Horizon server's, and then only a new transaction helps. Do one or
-the other, never both. `tx_bad_auth_extra` means that the transaction carries a signature the
-account doesn't use: a key signed it twice, a key that is no longer a signer signed it, or it has
-more signatures than the account's threshold needs. Sign the same unsigned transaction again with
-only the keys it needs: it keeps its hash, so it can't pay twice.
+The result code `tx_bad_auth` is a rejection for the signatures. When an account of the transaction
+needs more signature weight than the transaction carries, the same signed transaction can still be
+applied: pass `signedXdr` through a Stellar Signer with the credential of another signer of the
+account, and submit it. The code also comes from a key that isn't a signer of that account, or from
+signatures made for another network than the Horizon server's, and then only a new transaction
+helps. Do one or the other, never both. `tx_bad_auth_extra` means that the transaction carries a
+signature the account doesn't use: a key signed it twice, a key that is no longer a signer signed
+it, or it has more signatures than the account's threshold needs. Sign the same unsigned transaction
+again with only the keys it needs: it keeps its hash, so it can't pay twice.
 
 A `tx_failed` transaction may have been included in a ledger as failed. Then its fee was charged,
 its sequence number was used, and Horizon has it under its hash.

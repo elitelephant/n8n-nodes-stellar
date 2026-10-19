@@ -10,6 +10,7 @@ import {
 	xdr,
 } from '@stellar/stellar-sdk';
 
+import { resourceFeeOf } from '../shared/fees';
 import { horizonUrlFor, type NetworkName } from '../shared/network';
 
 // The SDK's own limit for the submission request, used for every request to Horizon.
@@ -299,10 +300,12 @@ const RESULT_CODES_URL =
 const ONLY_ONE_OF_THE_TWO =
 	'Do only one of the two: if this one and a new one are both applied, the payment is made twice.';
 
-// The network usually rejects these codes before a ledger, but it checks a transaction again when
-// it applies it, after it took the fee, so a rare one is in a ledger as failed.
-const USUALLY_NOT_INCLUDED =
-	"Usually it wasn't included in the ledger. If it is on Horizon under its hash, the network included it as failed and charged its fee.";
+// The network usually rejects tx_bad_auth, tx_bad_auth_extra, tx_insufficient_balance and
+// tx_bad_minseq_age_or_gap before a ledger, but it checks a transaction again when it applies it,
+// after it took the fee, so a rare one is in a ledger as failed.
+const IF_ON_HORIZON =
+	"If it is on Horizon under its hash, the network included it as failed: it charged its fee and used its sequence number, so this same transaction can't be applied anymore.";
+const USUALLY_NOT_INCLUDED = `Usually it wasn't included in the ledger. ${IF_ON_HORIZON}`;
 
 // A fee bump wraps the signed transaction without signing it again and pays its fee from the
 // account that signs the fee bump. The node doesn't sign fee bumps, so it is built outside.
@@ -325,7 +328,7 @@ const RESULT_CODES = new Map<
 	string,
 	(
 		transaction: Transaction,
-		answer: RejectionAnswer,
+		feeCharged: bigint | undefined,
 	) => Pick<SubmissionFailure, 'outcome' | 'description'>
 >([
 	// Not final. Horizon answers it for a number that is ahead of the account's, and that same
@@ -357,9 +360,9 @@ const RESULT_CODES = new Map<
 	// together with this one. For tx_insufficient_fee, a fee bump is one more way.
 	[
 		'tx_insufficient_fee',
-		(transaction, answer) => ({
+		(transaction, feeCharged) => ({
 			outcome: 'rejected',
-			description: `${feeTooSmall(transaction)}${answer.feeCharged === undefined ? '' : ` Horizon's answer asks for at least ${answer.feeCharged} stroops.`} It was not included in the ledger. Send this same signed transaction again later if the network was busy, or ${FEE_BUMP} with a higher fee, built and signed outside this node by the account that pays the fee, for example with the Stellar SDK. Neither can pay twice. Building a new transaction with a higher fee also works, but then don't send this one again: if both are applied, the payment is made twice.`,
+			description: `${feeTooSmall(transaction)}${feeAskedFor(feeCharged)} It was not included in the ledger. Send this same signed transaction again later if the network was busy, or ${FEE_BUMP} with a higher fee, built and signed outside this node by the account that pays the fee, for example with the Stellar SDK. Neither can pay twice. Building a new transaction with a higher fee also works, but then don't send this one again: if both are applied, the payment is made twice.`,
 		}),
 	],
 	[
@@ -392,7 +395,7 @@ const RESULT_CODES = new Map<
 		'tx_bad_auth',
 		() => ({
 			outcome: 'rejected',
-			description: `Its signatures don't authorize it: they don't add up to the weight that an account of the transaction requires, a key isn't a signer of that account, or they were made for another network than this Horizon server's. Usually it wasn't included in the ledger, so no fee was charged and the account's sequence number didn't change. If it is on Horizon under its hash, the network included it as failed and charged its fee. If an account needs more signatures, this same signed transaction can still be applied: pass the signedXdr output through a Stellar Signer with the credential of another signer of the account, and submit it. Otherwise, fix the cause and build a new transaction. ${ONLY_ONE_OF_THE_TWO}`,
+			description: `Its signatures don't authorize it: they don't add up to the weight that an account of the transaction requires, a key isn't a signer of that account, or they were made for another network than this Horizon server's. Usually it wasn't included in the ledger, so no fee was charged and the account's sequence number didn't change. ${IF_ON_HORIZON} If an account needs more signatures, this same signed transaction can still be applied: pass the signedXdr output through a Stellar Signer with the credential of another signer of the account, and submit it. Otherwise, fix the cause and build a new transaction. ${ONLY_ONE_OF_THE_TWO}`,
 		}),
 	],
 	[
@@ -431,9 +434,10 @@ function failureFrom(
 			const operations = Array.isArray(codes.operations)
 				? codes.operations.filter((code) => typeof code === 'string')
 				: [];
-			const known = RESULT_CODES.get(codes.transaction)?.(transaction, {
-				feeCharged: feeChargedIn(response?.data),
-			});
+			const known = RESULT_CODES.get(codes.transaction)?.(
+				transaction,
+				feeChargedIn(response?.data),
+			);
 			const named = `${codes.transaction}${operations.length === 0 ? '' : ` (${operations.join(', ')})`}`;
 			return {
 				outcome: known?.outcome ?? 'rejected',
@@ -624,40 +628,25 @@ function startName(start: Bound | undefined): string {
 	return names.length === 0 ? 'Its start time' : `Its ${names.join(' or its ')}`;
 }
 
-// What Horizon's rejection says besides its codes.
-interface RejectionAnswer {
-	// The result's feeCharged. For txINSUFFICIENT_FEE, stellar-core puts there the fee the network
-	// asks for.
-	feeCharged?: bigint;
-}
-
-// The feeCharged of the result_xdr that Horizon sends with a rejection, when it can be read and is
-// above zero.
-function feeChargedIn(body: unknown): bigint | undefined {
-	const extras = isRecord(body) && isRecord(body.extras) ? body.extras : undefined;
-	if (typeof extras?.result_xdr !== 'string') {
-		return undefined;
-	}
-	try {
-		const { feeCharged } = xdr.TransactionResult.fromXdr(extras.result_xdr, 'base64');
-		return feeCharged > BigInt(0) ? feeCharged : undefined;
-	} catch {
-		return undefined;
-	}
-}
-
-// The first sentence of tx_insufficient_fee. For a contract call, the total fee also carries the
+// The opening of tx_insufficient_fee. For a Soroban transaction the total fee also carries the
 // resource fee, and what competes to get in is the inclusion fee: the total minus the resource fee.
 function feeTooSmall(transaction: Transaction): string {
-	const busy =
+	const tooSmall =
 		"is too small: lower than the network's minimum, or lower than what other transactions are offering while the network is busy.";
-	const { ext } = transaction.tx;
-	if (ext.type !== 'sorobanData') {
-		return `Its fee, ${transaction.fee} stroops, ${busy}`;
+	const resourceFee = resourceFeeOf(transaction);
+	if (resourceFee === undefined) {
+		return `Its fee, ${transaction.fee} stroops, ${tooSmall}`;
 	}
-	const { resourceFee } = ext.sorobanData;
 	const inclusionFee = BigInt(transaction.fee) - resourceFee;
-	return `Its inclusion fee, ${inclusionFee} stroops, ${busy} Its total fee, ${transaction.fee} stroops, also carries a resource fee of ${resourceFee} stroops, which comes from the simulation and doesn't compete for inclusion.`;
+	return `Its inclusion fee, ${inclusionFee} stroops, ${tooSmall} Its total fee, ${transaction.fee} stroops, also carries a resource fee of ${resourceFee} stroops, which comes from the simulation and doesn't compete for inclusion.`;
+}
+
+// For txINSUFFICIENT_FEE, stellar-core puts in the result's feeCharged the total fee the network
+// asks for, resource fee included.
+function feeAskedFor(feeCharged: bigint | undefined): string {
+	return feeCharged === undefined
+		? ''
+		: ` Horizon's answer asks for a total fee of at least ${feeCharged} stroops.`;
 }
 
 // The wait that the transaction's minimum sequence age and ledger gap ask for.
@@ -689,6 +678,21 @@ function utcMinute(timeBound: string | undefined): string | undefined {
 	}
 	const minutes = Math.ceil(seconds / 60);
 	return `${new Date(minutes * 60 * 1000).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+}
+
+// The feeCharged of the result_xdr that Horizon sends with a rejection, when it can be read and is
+// above zero.
+function feeChargedIn(body: unknown): bigint | undefined {
+	const extras = isRecord(body) && isRecord(body.extras) ? body.extras : undefined;
+	if (typeof extras?.result_xdr !== 'string') {
+		return undefined;
+	}
+	try {
+		const { feeCharged } = xdr.TransactionResult.fromXdr(extras.result_xdr, 'base64');
+		return feeCharged > BigInt(0) ? feeCharged : undefined;
+	} catch {
+		return undefined;
+	}
 }
 
 // The name of a Horizon error, such as transaction_malformed, or undefined if the body isn't one
