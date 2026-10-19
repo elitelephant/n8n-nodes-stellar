@@ -106,11 +106,11 @@ transaction is there, the item comes out as submitted, with its ledger, or as `r
 network included it as failed. If Horizon doesn't confirm the transaction, the item fails, and the
 error says which of these happened:
 
-| Outcome         | What happened                                                                                                                                                                                                                                                     | What to do                                                                                                                |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `rejected`      | Horizon answered with result codes, such as `tx_failed` and `op_underfunded`, or the node found the transaction in a ledger as failed.                                                                                                                            | Fix what the codes say and build a new transaction. For `tx_too_late`, check first that the payment wasn't already made.  |
-| `not_submitted` | The transaction didn't reach the network. Horizon answered with one of the errors it gives before it passes a transaction on, for example a rate limit, or the node didn't send it because an earlier item had the same one.                                      | Do what the error's description says.                                                                                     |
-| `uncertain`     | Horizon gave no final answer, and the node didn't find the transaction when it looked it up: Horizon timed out or answered with a server error, the connection failed, the answer wasn't one of Horizon's, or Horizon rejected the transaction with `tx_bad_seq`. | Look the transaction up by its hash before anything else. For `tx_bad_seq`, compare sequence numbers, as explained below. |
+| Outcome         | What happened                                                                                                                                                                                                                                                     | What to do                                                                                                                                                             |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rejected`      | Horizon answered with result codes, such as `tx_failed` and `op_underfunded`, or the node found the transaction in a ledger as failed.                                                                                                                            | Fix what the codes say and build a new transaction. For `tx_too_late`, check first that the payment wasn't already made.                                               |
+| `not_submitted` | The transaction didn't reach the network. Horizon answered with one of the errors it gives before it passes a transaction on, for example a rate limit, or the node didn't send it because an earlier item had the same one.                                      | Do what the error's description says.                                                                                                                                  |
+| `uncertain`     | Horizon gave no final answer, and the node didn't find the transaction when it looked it up: Horizon timed out or answered with a server error, the connection failed, the answer wasn't one of Horizon's, or Horizon rejected the transaction with `tx_bad_seq`. | Send the same signed transaction again until Horizon gives a final result, and look it up by its hash. For `tx_bad_seq`, compare sequence numbers, as explained below. |
 
 An uncertain result doesn't mean the transaction failed. Unless the error says `tx_bad_seq`, which
 is explained below, the network can still apply the transaction until the limit it was built with,
@@ -127,7 +127,9 @@ a provider that didn't accept its key, comes out as `uncertain`, and its descrip
 **Horizon URL**.
 
 Sending the same signed transaction again is safe, because the network applies a transaction only
-once. There are two ways to do it:
+once. After an uncertain result, Stellar's documentation advises sending it again until Horizon
+gives a final result or the time limit passes, because the network may have dropped it from its
+queue. There are two ways to do it:
 
 - Run this node again with the same unsigned transaction. It signs it into the same signed
   transaction and submits it.

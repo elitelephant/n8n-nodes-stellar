@@ -536,7 +536,8 @@ const UNCERTAIN_ANSWERS = {
 		`The answer from ${host} doesn't look like Horizon's: check 'Horizon URL'.`,
 };
 
-// Horizon didn't say whether the transaction was applied.
+// Horizon didn't say whether the transaction was applied. Stellar's docs advise sending the same
+// transaction again after a timeout, because the network may have dropped it from its queue.
 function uncertain(
 	transaction: Transaction,
 	txHash: string,
@@ -554,7 +555,7 @@ function uncertain(
 	return {
 		outcome: 'uncertain',
 		message: `The result of transaction ${txHash} is uncertain: ${reason}`,
-		description: `${from} ${until} Sending this same signed transaction again is safe: it can be applied only once. Don't build a new one for this payment until you know.`,
+		description: `${from} ${until} Send this same signed transaction again until Horizon gives a final result: the network may have dropped it, and it can be applied only once, so that is safe. Don't build a new one for this payment until you know.`,
 		cause,
 		lookupAt: from.length + 1,
 	};
