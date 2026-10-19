@@ -72,13 +72,13 @@ the item keeps the XDR.
 
 Each output item keeps the fields of its input item and adds:
 
-| Field         | Description                                                                           |
-| ------------- | ------------------------------------------------------------------------------------- |
-| `signedXdr`   | The signed transaction, as base64 XDR.                                                |
-| `txHash`      | The transaction hash, in hex.                                                         |
-| `publicKey`   | The public key of the account that signed, which matches the credential's secret key. |
-| `network`     | The full network passphrase.                                                          |
-| `networkName` | `public` or `testnet`.                                                                |
+| Field         | Description                                                         |
+| ------------- | ------------------------------------------------------------------- |
+| `signedXdr`   | The signed transaction, as base64 XDR.                              |
+| `txHash`      | The transaction hash, in hex.                                       |
+| `publicKey`   | The public key of the credential's secret key, the key that signed. |
+| `network`     | The full network passphrase.                                        |
+| `networkName` | `public` or `testnet`.                                              |
 
 With **Submit to Horizon** on, the node sends the transaction to SDF's Horizon server for the chosen
 network: `https://horizon-testnet.stellar.org` for `testnet` and `https://horizon.stellar.org` for
@@ -235,11 +235,11 @@ nothing to the network.
 
 Each output item keeps the fields of its input item and adds:
 
-| Field       | Description                                         |
-| ----------- | --------------------------------------------------- |
-| `message`   | The text that was signed.                           |
-| `signature` | The signature, 64 bytes as base64.                  |
-| `publicKey` | The public key of the account that signed the text. |
+| Field       | Description                                                                                                         |
+| ----------- | ------------------------------------------------------------------------------------------------------------------- |
+| `message`   | The text that was signed.                                                                                           |
+| `signature` | The signature, 64 bytes as base64.                                                                                  |
+| `publicKey` | The public key of the credential's secret key, the key that signed the text. It identifies the key, not an account. |
 
 If the input item already has a field with one of these names, the node's value replaces it.
 
