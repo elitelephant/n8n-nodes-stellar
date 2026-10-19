@@ -31,7 +31,8 @@ The package has one node, **Stellar Signer**, with two operations:
 - **Sign Message** (`signMessage`): signs a text with the wallet's key. See
   [Sign a message](#sign-a-message).
 
-A workflow saved before the **Operation** parameter existed signs transactions, as before.
+A workflow saved before the **Operation** parameter existed signs transactions, once its input items
+carry `networkName`, as explained below.
 
 ### Sign a transaction
 
@@ -82,18 +83,19 @@ Each output item keeps the fields of its input item and adds:
 
 With **Submit to Horizon** on, the node sends the transaction to SDF's Horizon server for the chosen
 network: `https://horizon-testnet.stellar.org` for `testnet` and `https://horizon.stellar.org` for
-`public`. Stellar's documentation no longer lists the `public` one: if it stops answering, enter
-your provider's address in **Horizon URL**. Each output item also has:
+`public`. Stellar's Horizon page names SDF's `testnet` server but not the `public` one: if it stops
+answering, enter your provider's address in **Horizon URL**. Each output item also has:
 
 | Field       | Description                                             |
 | ----------- | ------------------------------------------------------- |
 | `submitted` | `true`: Horizon confirmed the transaction.              |
 | `ledger`    | The number of the ledger that included the transaction. |
 
-Before it signs a payment that has no memo, the node asks that Horizon server whether the
-destination account requires one
-([SEP-29](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0029.md)). If it
-does, or if Horizon doesn't answer, the item fails and nothing is signed or sent.
+Before it signs a transaction without a memo that pays a `G` address with a payment, a path payment
+or an account merge, the node asks that Horizon server whether the destination account requires a
+memo ([SEP-29](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0029.md)). If
+it does, or if Horizon doesn't answer or answers with an error, the item fails and nothing is signed
+or sent. A destination account that doesn't exist yet requires nothing.
 
 The node waits up to 60 seconds for each answer from Horizon and doesn't follow redirects. Error
 messages count a transaction's operations from 1 and a run's items from 0, as n8n does.
@@ -312,12 +314,13 @@ result:
 3. The next node reads the signed transaction with `{{ $json.signedXdr }}`. To send it to the
    network from this node instead, turn on **Submit to Horizon** and read `{{ $json.ledger }}`.
 
-To co-sign a transaction of an account that needs several signatures, pass `signedXdr` through
-another Stellar Signer with the credential of the next signer. Each key signs once: if the XDR
-already has a valid signature of the credential's key, the item fails before it is signed, because
-the network rejects a repeated signature with `tx_bad_auth_extra`. The network also rejects a
-signature that the account doesn't need: once the signatures reach the account's threshold, one
-more, even a valid one, gets `tx_bad_auth_extra`.
+To co-sign a transaction that needs several signatures, because its account needs them or because an
+operation has another source account, pass `signedXdr` through another Stellar Signer with the
+credential of the next signer. Each key signs once: if the XDR already has a valid signature of the
+credential's key, the item fails before it is signed, because the network rejects a repeated
+signature with `tx_bad_auth_extra`. The network also rejects a signature that the account doesn't
+need: once the signatures reach the account's threshold, one more, even a valid one, gets
+`tx_bad_auth_extra`.
 
 ## Resources
 
