@@ -145,6 +145,8 @@ export class StellarSigner implements INodeType {
 				displayName: 'Message',
 				name: 'message',
 				type: 'string',
+				// The editor marks it as missing. An expression that gives nothing still fails in the node.
+				required: true,
 				typeOptions: {
 					rows: 4,
 				},
