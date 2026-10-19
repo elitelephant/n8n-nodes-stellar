@@ -144,7 +144,8 @@ export async function checkMemoRequired(
 }
 
 // What a submission that Horizon didn't confirm means for the transaction.
-// - rejected: Horizon answered with result codes that are final for the transaction.
+// - rejected: Horizon answered with result codes: the network didn't take this submission. Some
+//   codes still let the same signed transaction in later, and their texts say so.
 // - not_submitted: Horizon answered before passing it to the network, or the node didn't send it.
 // - uncertain: Horizon gave no verdict, or one that isn't final, so the transaction may still be
 //   applied.
@@ -292,7 +293,8 @@ function positiveLedger(value: unknown): number | undefined {
 const RESULT_CODES_URL =
 	'https://developers.stellar.org/docs/data/apis/horizon/api-reference/errors/result-codes';
 
-// How the two rejections that the same transaction can get past later end their description.
+// How a rejection that this same signed transaction can get past later ends its description, when
+// the other way on is a new transaction.
 const ONLY_ONE_OF_THE_TWO =
 	'Do only one of the two: if this one and a new one are both applied, the payment is made twice.';
 
@@ -342,8 +344,8 @@ const RESULT_CODES = new Map<
 	],
 	// Rejections that this same signed transaction can get past later: when the network asks for
 	// a lower fee, or when its start time comes. The network did not take it, so they stay
-	// rejections, and the text gives the ways to go on and says not to add a new transaction. A
-	// fee bump raises the fee without a new transaction.
+	// rejections, and the text gives the ways to go on and says not to take a new transaction
+	// together with this one. For tx_insufficient_fee, a fee bump is one more way.
 	[
 		'tx_insufficient_fee',
 		(transaction) => ({
