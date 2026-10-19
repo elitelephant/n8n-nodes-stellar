@@ -54,18 +54,23 @@ their own switch.
   `liquidityPoolDeposit`, `liquidityPoolWithdraw`, `invokeHostFunction`, `extendFootprintTtl`,
   `restoreFootprint`.
 
-- **Maximum Amounts**: the most that one operation may send of each asset, one limit per line. Write
-  `XLM=100` for lumens, or `CODE:ISSUER=100` for another asset, with its code and the address of the
-  account that issues it. `native` also means lumens, as the Stellar SDK and CLI write them. An
-  amount can have up to 7 decimals. The node looks at what leaves the account: the amount of a
-  `payment`, what a `pathPaymentStrictSend` sends, the most a `pathPaymentStrictReceive` may send,
-  and the starting balance of a `createAccount`. While the field has any line, an operation that
-  sends an asset without a line fails, so write a line for every asset the wallet pays in. A path
-  payment needs a line only for the asset it sends. The limit is for each operation, not for the
-  transaction or the run: ten payments of 10 pass a limit of 10. A limit of 0 means the node sends
-  none of that asset, unlike **Maximum Fee**, where 0 means no limit. Asset codes are
-  case-sensitive, so a limit for `usdc` is not a limit for `USDC`: a payment in `USDC` then fails,
-  because it has no line.
+  Stellar's documentation lists **Revoke sponsorship** as one operation, and the SDK splits it into
+  the seven `revoke…Sponsorship` types above: list the ones the workflow needs. `inflation` no
+  longer works on the network, and `allowTrust` is deprecated in favor of `setTrustLineFlags`.
+
+- **Maximum Amounts**: the most that one payment operation may send of each asset, one limit per
+  line. Write `XLM=100` for lumens, or `CODE:ISSUER=100` for another asset, with its code and the
+  address of the account that issues it. `native` also means lumens, as the Stellar SDK and CLI
+  write them. An amount can have up to 7 decimals. The node looks at what each payment operation
+  sends from its source account, which can be another account than this one, as in a payment to this
+  account that the node co-signs: the amount of a `payment`, what a `pathPaymentStrictSend` sends,
+  the most a `pathPaymentStrictReceive` may send, and the starting balance of a `createAccount`.
+  While the field has any line, an operation that sends an asset without a line fails, so write a
+  line for every asset the wallet pays in. A path payment needs a line only for the asset it sends.
+  The limit is for each operation, not for the transaction or the run: ten payments of 10 pass a
+  limit of 10. A limit of 0 means the node sends none of that asset, unlike **Maximum Fee**, where 0
+  means no limit. Asset codes are case-sensitive, so a limit for `usdc` is not a limit for `USDC`: a
+  payment in `USDC` then fails, because it has no line.
 
 - **Allowed Assets**: the assets the node may pay in, one per line, written as in **Maximum
   Amounts**: `XLM` (or `native`), or `CODE:ISSUER`. The issuer is part of the asset, so the same
@@ -80,7 +85,9 @@ their own switch.
 
 - **Maximum Fee**: the highest fee, in stroops, that a transaction may carry. One XLM is 10,000,000
   stroops. It is the transaction's total fee, for all its operations: the most the account agrees to
-  pay, which can be more than what the network ends up charging. `0`, the default, means no limit.
+  pay, which can be more than what the network ends up charging. For a Soroban contract call it also
+  includes the resource fee, which comes from the call's simulation. `0`, the default, means no
+  limit.
 
 - **Allow Message Signing**: whether the node may sign messages with this key, with its **Sign
   Message** operation. It is off by default, and Sign Message fails while it is off. Leave it off
@@ -101,9 +108,11 @@ liquidity pools and Soroban.
 `invokeHostFunction` calls a Soroban smart contract, and the node doesn't look at what the call
 does. When the contract asks this account to authorize the call and the account is the source of the
 transaction, the signature on the transaction is that authorization: no other signature is needed. A
-call to a token's `approve`, for example, lets another account spend from this one until the
-allowance's expiration ledger passes or someone revokes it, also after the workflow has stopped.
-List `invokeHostFunction` only for a workflow that controls which contract and function it calls.
+`transfer` through an asset's contract, for example, moves the same XLM or tokens that **Maximum
+Amounts** limits, without that limit. A call to a token's `approve` lets another account or a
+contract spend from this one until the allowance's expiration ledger passes or someone revokes it,
+also after the workflow has stopped. List `invokeHostFunction` only for a workflow that controls
+which contract and function it calls.
 
 A limit with a mistake never counts as no limit. If the node can't read one, for example because a
 line isn't an operation type, nothing is signed: the run fails, or every item comes out failed when

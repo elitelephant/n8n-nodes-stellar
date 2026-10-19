@@ -297,7 +297,8 @@ function howToLowerTheFee(transaction: Transaction): string {
 }
 
 // Returns the first thing in the transaction that the policy doesn't allow. It checks every
-// operation, whatever its source account: a signature counts for the whole transaction.
+// operation, whatever its source account: the key may sign as the transaction's source or as a
+// signer of another operation's source account.
 export function checkPolicy(policy: Policy, transaction: Transaction): PolicyViolation | undefined {
 	const { maxFee } = policy;
 	if (maxFee !== undefined) {
