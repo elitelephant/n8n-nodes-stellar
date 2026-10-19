@@ -155,7 +155,7 @@ export class StellarSigner implements INodeType {
 					},
 				},
 				description:
-					"The text to sign, exactly as entered. The signature follows SEP-53 and proves that this wallet's key signed this exact text.",
+					"The text to sign, exactly as entered. The signature follows SEP-53 and proves that this wallet's key signed this exact text. The node returns it as base64 in the signature field.",
 			},
 		],
 	};
