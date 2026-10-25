@@ -10,6 +10,7 @@ import type {
 import { NodeConnectionTypes } from 'n8n-workflow';
 import { Keypair } from '@stellar/stellar-sdk';
 
+import { readPolicy } from '../shared/policy';
 import { commonProperties } from './actions/common';
 import * as holder from './actions/holder/Holder.resource';
 import { router } from './actions/router';
@@ -69,18 +70,17 @@ export class ConfidentialToken implements INodeType {
 
 	methods = {
 		credentialTest: {
-			// Reads the secret key offline: the credential doesn't know the token, so the account isn't
-			// looked up. The SDK's error isn't repeated, because it can carry what was read.
+			// Reads the secret key and the policy offline: the credential doesn't know the token, so the
+			// account isn't looked up. The SDK's error isn't repeated, because it can carry what was
+			// read, and neither is the value of a policy field. A policy that can't be read stops every
+			// Transfer and Withdraw, so saving the credential warns, as the Stellar Signer's does.
 			async confidentialTokenHolderApiTest(
 				this: ICredentialTestFunctions,
 				credential: ICredentialsDecrypted,
 			): Promise<INodeCredentialTestResult> {
+				let keypair: Keypair;
 				try {
-					const keypair = Keypair.fromSecret(credential.data?.secretKey as string);
-					return {
-						status: 'OK',
-						message: `Valid secret key for public key ${keypair.publicKey()}`,
-					};
+					keypair = Keypair.fromSecret(credential.data?.secretKey as string);
 				} catch {
 					return {
 						status: 'Error',
@@ -88,6 +88,15 @@ export class ConfidentialToken implements INodeType {
 							"'Secret Key' isn't a valid Stellar secret key. Enter 56 characters starting with S.",
 					};
 				}
+				const reading = readPolicy(credential.data);
+				if ('invalid' in reading) {
+					const { field, problem, fix } = reading.invalid;
+					return { status: 'Error', message: `'${field}' ${problem}. ${fix}` };
+				}
+				return {
+					status: 'OK',
+					message: `Valid secret key for public key ${keypair.publicKey()}`,
+				};
 			},
 		},
 	};
