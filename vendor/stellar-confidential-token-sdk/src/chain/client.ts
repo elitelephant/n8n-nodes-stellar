@@ -69,7 +69,7 @@ export interface InvokeResult {
   /** Return value of the invoked function (if any). */
   returnValue?: xdr.ScVal;
   /** n8n-nodes-stellar: the ledger that included the transaction (VENDORED.md). */
-  ledger: number;
+  ledger: number; // n8n-nodes-stellar: (VENDORED.md)
 }
 
 /** On-chain confidential account (`confidential_balance` return value). */
