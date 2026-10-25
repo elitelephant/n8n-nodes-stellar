@@ -3,7 +3,7 @@ import { NodeOperationError } from 'n8n-workflow';
 import { type Asset, extractBaseAddress, type Horizon, StrKey } from '@stellar/stellar-sdk';
 
 import { toAmount } from '../../../shared/amount';
-import { assetName, assetOfBalance, toAsset } from '../../../shared/asset';
+import { assetName, assetOfBalance } from '../../../shared/asset';
 import type { NetworkName } from '../../../shared/network';
 import { findAccount } from '../../transport/horizon';
 
@@ -85,44 +85,6 @@ export const fields: INodeProperties[] = [
 	},
 ];
 
-// The source accounts of the run, as the SDK keeps them, by network and address: building a
-// transaction moves the account's sequence number on.
-export type SourceAccounts = Map<string, Horizon.AccountResponse>;
-
-// The source account, read from Horizon the first time the run needs it, or every time without
-// sourceAccounts. An account that doesn't
-// exist on the network fails the item. The address goes in the description: n8n replaces a message
-// that happens to contain one of Node's error codes, and an address can.
-export async function sourceAccountFor(
-	node: INode,
-	horizon: Horizon.Server,
-	sourceAccounts: SourceAccounts | undefined,
-	networkName: NetworkName,
-	sourceAccount: string,
-	itemIndex: number,
-): Promise<Horizon.AccountResponse> {
-	const key = `${networkName} ${sourceAccount}`;
-	const known = sourceAccounts?.get(key);
-	if (known !== undefined) {
-		return known;
-	}
-	const account = await findAccount(
-		node,
-		horizon,
-		sourceAccount,
-		"Couldn't read the source account",
-		itemIndex,
-	);
-	if (account === undefined) {
-		throw new NodeOperationError(node, `The source account doesn't exist on ${networkName}`, {
-			itemIndex,
-			description: `Horizon has no account ${sourceAccount} on ${networkName}, so nothing was built. Check 'Source Account' and 'Network'. An account exists only after another account creates it with XLM; on testnet, Friendbot can create it.`,
-		});
-	}
-	sourceAccounts?.set(key, account);
-	return account;
-}
-
 // Checks that the destination can take the payment before it is built: its account exists, it can
 // receive the asset, and it has a memo if it asks for one. Says whether it asks for one.
 export async function checkReceiver(
@@ -168,13 +130,18 @@ export async function checkReceiver(
 }
 
 // The amount as the SDK takes it. It is checked before any request to Horizon.
-export function readAmount(node: INode, value: unknown, itemIndex: number): string {
+// fix says what to enter, for the operation that reads it.
+export function readAmount(
+	node: INode,
+	value: unknown,
+	itemIndex: number,
+	fix = 'Enter how much of the asset to send, for example 25 or 25.5.',
+): string {
 	const amount = toAmount(value);
 	if (amount === undefined) {
 		throw new NodeOperationError(node, "'Amount' must be a positive number with up to 7 decimals", {
 			itemIndex,
-			description:
-				'Enter how much of the asset to send, for example 25 or 25.5. Stellar amounts have at most 7 digits after the decimal point.',
+			description: `${fix} Stellar amounts have at most 7 digits after the decimal point.`,
 		});
 	}
 	return amount;
@@ -214,23 +181,6 @@ export function readSourceAccount(node: INode, value: unknown, itemIndex: number
 	return value;
 }
 
-// A time limit of at least one whole second: without one, the network would take the transaction
-// at any time.
-export function readTimeLimit(node: INode, value: unknown, itemIndex: number): number {
-	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) {
-		throw new NodeOperationError(
-			node,
-			"'Time Limit (Seconds)' must be a whole number of seconds, 1 or more",
-			{
-				itemIndex,
-				description:
-					'Enter how many seconds the network accepts the transaction after it is built, for example 300 for five minutes.',
-			},
-		);
-	}
-	return value;
-}
-
 // Whether a payment to this destination needs a memo, as SEP-29 says: its account has the data
 // entry config.memo_required set to 1, which Horizon gives in base64. An M address already names
 // the user of the account, so it needs none, and the SDK's own check skips it too.
@@ -254,20 +204,6 @@ export function readDestination(node: INode, value: unknown, itemIndex: number):
 		});
 	}
 	return value;
-}
-
-// The asset to send. It is checked before any request to Horizon. Spaces around it, as a sheet can
-// leave, don't count, as in the Stellar Signer's policy.
-export function readAsset(node: INode, value: unknown, itemIndex: number): Asset {
-	const asset = toAsset(typeof value === 'string' ? value.trim() : value);
-	if (asset === undefined) {
-		throw new NodeOperationError(node, "'Asset' isn't a valid Stellar asset", {
-			itemIndex,
-			description:
-				'Write XLM or native for lumens, or CODE:ISSUER for another asset: its code, a colon, and the address of the account that issues it, for example USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN.',
-		});
-	}
-	return asset;
 }
 
 // Whether the destination account can receive the asset: lumens always, an issued asset only with a

@@ -1,7 +1,9 @@
 import type { INode } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
-import { type Horizon, NetworkError, NotFoundError } from '@stellar/stellar-sdk';
+import { Asset, type Horizon, NetworkError, NotFoundError } from '@stellar/stellar-sdk';
 
+import { fromStroops, toStroops } from '../../shared/amount';
+import { assetName, assetOfBalance } from '../../shared/asset';
 import { horizonClientFor } from '../../shared/horizon';
 import type { NetworkName } from '../../shared/network';
 
@@ -75,6 +77,9 @@ async function unlessMissing<T>(
 	}
 }
 
+// The most records Horizon gives in one page.
+export const HORIZON_PAGE_SIZE = 200;
+
 // What Horizon lists under an account's payments: payments, path payments, account creations and
 // merges, and contract calls.
 export type PaymentsPage = Awaited<ReturnType<ReturnType<Horizon.Server['payments']>['call']>>;
@@ -108,6 +113,65 @@ export async function findPayments(
 		request.cursor(page.cursor);
 	}
 	return await unlessMissing(node, horizon, async () => await request.call(), failure, itemIndex);
+}
+
+// What a payment received by an account moved, as Horizon lists it under the account's payments.
+export interface Transfer {
+	from: string;
+	to: string;
+	// As the Stellar Signer's policy writes it: XLM or CODE:ISSUER.
+	asset: string;
+	amount: string;
+}
+
+// The transfer of a record that is a payment received by the account: a payment or a path payment to
+// it, or the create account operation that creates it. Undefined for any other record: a payment the
+// account sent, a contract call, or an account merge.
+export function receivedTransfer(
+	record: PaymentsPage['records'][number],
+	account: string,
+): Transfer | undefined {
+	if (record.type === 'create_account') {
+		return record.account === account
+			? { from: record.funder, to: record.account, asset: 'XLM', amount: record.starting_balance }
+			: undefined;
+	}
+	if (
+		(record.type === 'payment' ||
+			record.type === 'path_payment_strict_receive' ||
+			record.type === 'path_payment_strict_send') &&
+		record.to === account
+	) {
+		const asset =
+			record.asset_type === 'native'
+				? Asset.native()
+				: new Asset(record.asset_code ?? '', record.asset_issuer);
+		return { from: record.from, to: record.to, asset: assetName(asset), amount: record.amount };
+	}
+	return undefined;
+}
+
+// The transaction that Horizon joins to each record. The SDK keeps it in transaction_attr, which its
+// types don't declare, and moves its ledger to ledger_attr.
+type JoinedTransaction = Pick<
+	Horizon.ServerApi.TransactionRecord,
+	'memo_type' | 'memo' | 'ledger_attr'
+>;
+
+// The memo and the ledger of a record's joined transaction. The memo is as Horizon gives it: a text,
+// an id in decimal, or a hash in base64, and null without one.
+export function joinedTransaction(record: PaymentsPage['records'][number]): {
+	memo: string | null;
+	ledger: number | null;
+} {
+	const transaction = (record as { transaction_attr?: JoinedTransaction }).transaction_attr;
+	return {
+		memo:
+			transaction === undefined || transaction.memo_type === 'none'
+				? null
+				: (transaction.memo ?? null),
+		ledger: transaction?.ledger_attr ?? null,
+	};
 }
 
 // The base fee of the last ledger, per operation, in stroops. The SDK reads it from Horizon's
@@ -212,4 +276,85 @@ function horizonErrorType(body: unknown): string | undefined {
 		return body.type.slice(HORIZON_ERROR_TYPES.length);
 	}
 	return undefined;
+}
+
+// What an account holds of one asset, as Horizon writes the amounts: the asset as the policy writes
+// it, the balance, what the account can spend of it, and the trustline's limit, null for XLM.
+export type Balance = {
+	asset: string;
+	balance: string;
+	spendable: string;
+	limit: string | null;
+};
+
+// An account as Horizon has it now, with the base reserve of the last ledger, the minimum balance
+// that reserve gives it, and its balances.
+export interface AccountBalances {
+	account: Horizon.AccountResponse;
+	reserve: bigint;
+	minimumBalance: bigint;
+	balances: Balance[];
+}
+
+// Reads an account and what it holds, as Account › Get and the Stellar Trigger give it. An account
+// that doesn't exist on the network fails. The address goes in the description: n8n replaces a
+// message that happens to contain one of Node's error codes, and an address can.
+export async function findBalances(
+	node: INode,
+	horizon: Horizon.Server,
+	accountId: string,
+	networkName: NetworkName,
+	itemIndex: number | undefined,
+): Promise<AccountBalances> {
+	const account = await findAccount(
+		node,
+		horizon,
+		accountId,
+		"Couldn't read the account",
+		itemIndex,
+	);
+	if (account === undefined) {
+		throw new NodeOperationError(node, `The account doesn't exist on ${networkName}`, {
+			itemIndex,
+			description: `Horizon has no account ${accountId} on ${networkName}. Check 'Account' and 'Network'. An account exists only after another account creates it with XLM; on testnet, Friendbot can create it.`,
+		});
+	}
+	const reserve = BigInt(await baseReserve(node, horizon, itemIndex));
+	const minimumBalance = minimumBalanceOf(account, reserve);
+	return { account, reserve, minimumBalance, balances: balancesOf(account, minimumBalance) };
+}
+
+// The XLM an account has to keep, in stroops, as Stellar's docs give it: two base reserves, one
+// more for each subentry and each entry it sponsors for another account, and one less for each of
+// its entries that another account sponsors.
+function minimumBalanceOf(account: Horizon.AccountResponse, reserve: bigint): bigint {
+	const entries = 2 + account.subentry_count + account.num_sponsoring - account.num_sponsored;
+	return BigInt(entries) * reserve;
+}
+
+// One balance per asset, XLM first and then the trustlines in Horizon's order. Liquidity pool
+// shares aren't listed. What the account can spend is its balance minus what its sell offers
+// commit, and, for XLM, minus its minimum balance too. It is never below zero.
+function balancesOf(account: Horizon.AccountResponse, minimumBalance: bigint): Balance[] {
+	const balances: Balance[] = [];
+	for (const line of account.balances) {
+		const asset = assetOfBalance(line);
+		if (asset === undefined || !('selling_liabilities' in line)) {
+			continue;
+		}
+		const free = toStroops(line.balance) - toStroops(line.selling_liabilities);
+		if (asset === 'XLM') {
+			const spendable = spendableText(free - minimumBalance);
+			balances.unshift({ asset, balance: line.balance, spendable, limit: null });
+		} else if ('limit' in line) {
+			const spendable = spendableText(free);
+			balances.push({ asset, balance: line.balance, spendable, limit: line.limit });
+		}
+	}
+	return balances;
+}
+
+// What is left to spend, never below zero, as Horizon writes an amount.
+function spendableText(stroops: bigint): string {
+	return fromStroops(stroops > BigInt(0) ? stroops : BigInt(0));
 }

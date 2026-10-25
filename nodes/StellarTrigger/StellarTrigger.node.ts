@@ -7,32 +7,31 @@ import type {
 	IPollFunctions,
 } from 'n8n-workflow';
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
-import { Asset, type Horizon, StrKey } from '@stellar/stellar-sdk';
+import { type Horizon, StrKey } from '@stellar/stellar-sdk';
 
 import { toAmount, toStroops } from '../shared/amount';
 import { assetName, toAsset } from '../shared/asset';
 import { horizonClientFor, nodeForErrors } from '../shared/horizon';
 import { isNetworkName, type NetworkName } from '../shared/network';
-import { findPayments, type PaymentsPage, type PaymentsQuery } from '../Stellar/transport/horizon';
+import {
+	findPayments,
+	HORIZON_PAGE_SIZE,
+	joinedTransaction,
+	type PaymentsPage,
+	type PaymentsQuery,
+	receivedTransfer,
+	type Transfer,
+} from '../Stellar/transport/horizon';
+import { balanceProperties, pollBalance } from './balanceBelowThreshold';
+import { memoryFor } from './memory';
 
 const POLLS_OVER_HTTPS =
 	"This node polls a Horizon server over https. Plain http is accepted only for localhost. Enter an https address, or leave the field empty to use SDF's server for the network.";
 
-// Horizon gives at most 200 records per page. A poll reads up to 10 pages, and leaves the rest for
-// the next one.
-const PAGE_SIZE = 200;
+// A poll reads up to 10 pages of the most records Horizon gives, and leaves the rest for the next
+// one.
+const PAGE_SIZE = HORIZON_PAGE_SIZE;
 const MAX_PAGES = 10;
-
-// What the Trigger keeps between polls, in its static data: the cursor of the last record it read,
-// for which account and network. While the workflow is active, n8n keeps it in memory, and it saves
-// it to the database when a poll returns items, right after activation and when the workflow is
-// deactivated.
-interface TriggerMemory {
-	account?: string;
-	networkName?: NetworkName;
-	// A Horizon paging token, or FROM_START.
-	cursor?: string;
-}
 
 // The cursor that means "from the account's first record": the account had no records when the
 // Trigger started, so its create account operation is the first payment it gets.
@@ -49,7 +48,8 @@ export class StellarTrigger implements INodeType {
 		group: ['trigger'],
 		version: 1,
 		subtitle: '={{ $parameter["event"] }}',
-		description: 'Starts the workflow when a Stellar account receives a payment',
+		description:
+			'Starts the workflow when a Stellar account receives a payment, or when its balance goes below a threshold',
 		defaults: {
 			name: 'Stellar Trigger',
 		},
@@ -69,6 +69,12 @@ export class StellarTrigger implements INodeType {
 						description:
 							'A payment or path payment to the account, or the create account operation that creates it',
 					},
+					{
+						name: 'Balance Below Threshold',
+						value: 'balanceBelowThreshold',
+						description:
+							"The account's balance of an asset goes below a threshold. It fires once, and again only after the balance gets back to the threshold. A manual test has no memory: it returns the balance whenever it is below.",
+					},
 				],
 				default: 'paymentReceived',
 			},
@@ -80,7 +86,7 @@ export class StellarTrigger implements INodeType {
 				default: '',
 				placeholder: 'e.g. GABC...',
 				description:
-					"The public key of the account to watch, starting with G. The first poll starts from now and doesn't bring the account's history. A manual test returns the last payment it received.",
+					"The public key of the account to watch, starting with G. For Payment Received, the first poll starts from now and doesn't bring the account's history, and a manual test returns the last payment it received.",
 			},
 			{
 				displayName: 'Network',
@@ -109,6 +115,7 @@ export class StellarTrigger implements INodeType {
 				description:
 					"The Horizon server to poll, as an https address. Plain http works only for localhost, and the address can't have a user name or a password. Leave empty to use SDF's server for the network: horizon-testnet.stellar.org for testnet and horizon.stellar.org for public.",
 			},
+			...balanceProperties,
 			{
 				displayName: 'Filters',
 				name: 'filters',
@@ -151,6 +158,9 @@ export class StellarTrigger implements INodeType {
 			POLLS_OVER_HTTPS,
 		);
 		const account = readAccount(node, this.getNodeParameter('account', ''));
+		if (this.getNodeParameter('event', 'paymentReceived') === 'balanceBelowThreshold') {
+			return await pollBalance(this, node, horizon, account, networkName);
+		}
 		const filters = this.getNodeParameter('filters', {}) as IDataObject;
 		const filter: PaymentFilter = {
 			asset: readAssetFilter(node, filters.asset),
@@ -161,7 +171,7 @@ export class StellarTrigger implements INodeType {
 			return [[{ json: await lastPaymentReceived(node, horizon, account, networkName, filter) }]];
 		}
 
-		const memory = this.getWorkflowStaticData('node') as TriggerMemory;
+		const memory = memoryFor(this, 'paymentReceived');
 		if (memory.account !== account || memory.networkName !== networkName || !memory.cursor) {
 			// The first poll, or one after the account or the network changed, starts from now.
 			const cursor = await latestCursor(node, horizon, account);
@@ -263,63 +273,18 @@ async function lastPaymentReceived(
 	});
 }
 
-// The transaction that Horizon joins to each record, with its memo. The SDK keeps it in
-// transaction_attr, which its types don't declare, and moves its ledger to ledger_attr.
-type JoinedTransaction = Pick<
-	Horizon.ServerApi.TransactionRecord,
-	'memo_type' | 'memo' | 'ledger_attr'
->;
-
-// What a payment received by the account moved, or undefined for any other record: a payment the
-// account sent, a contract call, or an account merge.
-interface Transfer {
-	from: string;
-	to: string;
-	// As the Stellar Signer's policy writes it: XLM or CODE:ISSUER.
-	asset: string;
-	amount: string;
-}
-
-function receivedTransfer(
-	record: PaymentsPage['records'][number],
-	account: string,
-): Transfer | undefined {
-	if (record.type === 'create_account') {
-		return record.account === account
-			? { from: record.funder, to: record.account, asset: 'XLM', amount: record.starting_balance }
-			: undefined;
-	}
-	if (
-		(record.type === 'payment' ||
-			record.type === 'path_payment_strict_receive' ||
-			record.type === 'path_payment_strict_send') &&
-		record.to === account
-	) {
-		const asset =
-			record.asset_type === 'native'
-				? Asset.native()
-				: new Asset(record.asset_code ?? '', record.asset_issuer);
-		return { from: record.from, to: record.to, asset: assetName(asset), amount: record.amount };
-	}
-	return undefined;
-}
-
 // The output item for a payment received: what it moved, with its memo, its transaction and when.
 function itemFor(
 	record: PaymentsPage['records'][number],
 	transfer: Transfer,
 	networkName: NetworkName,
 ): IDataObject {
-	const transaction = (record as { transaction_attr?: JoinedTransaction }).transaction_attr;
+	const { memo, ledger } = joinedTransaction(record);
 	return {
 		...transfer,
-		// As Horizon gives it: a text, an id in decimal, or a hash in base64.
-		memo:
-			transaction === undefined || transaction.memo_type === 'none'
-				? null
-				: (transaction.memo ?? null),
+		memo,
 		txHash: record.transaction_hash,
-		ledger: transaction?.ledger_attr ?? null,
+		ledger,
 		createdAt: record.created_at,
 		networkName,
 	};

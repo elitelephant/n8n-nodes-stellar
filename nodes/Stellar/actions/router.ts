@@ -3,6 +3,7 @@ import { NodeOperationError } from 'n8n-workflow';
 
 import { nodeForErrors } from '../../shared/horizon';
 import * as account from './account/Account.resource';
+import * as asset from './asset/Asset.resource';
 import * as payment from './payment/Payment.resource';
 
 // An operation of the node gets all the input items of the run at once, so it can keep what the
@@ -11,6 +12,7 @@ type NodeOperation = (this: IExecuteFunctions, node: INode) => Promise<INodeExec
 
 const resources: Record<string, Record<string, { execute: NodeOperation }>> = {
 	account: account.operations,
+	asset: asset.operations,
 	payment: payment.operations,
 };
 
