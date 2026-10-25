@@ -17,7 +17,7 @@ import {
 } from '@stellar/stellar-sdk';
 
 import { toAmount } from '../../../shared/amount';
-import { NETWORK_PASSPHRASES } from '../../../shared/network';
+import { NETWORK_PASSPHRASES, type NetworkName } from '../../../shared/network';
 import { baseFee, findAccount, horizonFor, timeboundsFor } from '../../transport/horizon';
 import { readNetwork } from '../common';
 import { forEachItem } from '../forEachItem';
@@ -88,19 +88,61 @@ export const description: INodeProperties[] = [
 	},
 ];
 
-// Builds one unsigned payment in XLM per item for the Stellar Signer.
+// Builds one unsigned payment in XLM per item for the Stellar Signer. Each source account is read
+// from Horizon once per run, and every payment from it takes the next sequence number, in the
+// order of the items. So a run with one transaction per invoice gets in whole when the Signer
+// submits them in that order. A payment that fails before it is built takes no number.
 export async function execute(this: IExecuteFunctions, node: INode): Promise<INodeExecutionData[]> {
+	const sourceAccounts: SourceAccounts = new Map();
 	return await forEachItem(
 		this,
 		node,
-		async (itemIndex) => await buildPayment(this, node, itemIndex),
+		async (itemIndex) => await buildPayment(this, node, itemIndex, sourceAccounts),
 	);
+}
+
+// The source accounts of the run, as the SDK keeps them, by network and address: building a
+// transaction moves the account's sequence number on.
+type SourceAccounts = Map<string, Horizon.AccountResponse>;
+
+// The source account, read from Horizon the first time the run needs it. An account that doesn't
+// exist on the network fails the item. The address goes in the description: n8n replaces a message
+// that happens to contain one of Node's error codes, and an address can.
+async function sourceAccountFor(
+	node: INode,
+	horizon: Horizon.Server,
+	sourceAccounts: SourceAccounts,
+	networkName: NetworkName,
+	sourceAccount: string,
+	itemIndex: number,
+): Promise<Horizon.AccountResponse> {
+	const key = `${networkName} ${sourceAccount}`;
+	const known = sourceAccounts.get(key);
+	if (known !== undefined) {
+		return known;
+	}
+	const account = await findAccount(
+		node,
+		horizon,
+		sourceAccount,
+		"Couldn't read the source account",
+		itemIndex,
+	);
+	if (account === undefined) {
+		throw new NodeOperationError(node, `The source account doesn't exist on ${networkName}`, {
+			itemIndex,
+			description: `Horizon has no account ${sourceAccount} on ${networkName}, so nothing was built. Check 'Source Account' and 'Network'. An account exists only after another account creates it with XLM; on testnet, Friendbot can create it.`,
+		});
+	}
+	sourceAccounts.set(key, account);
+	return account;
 }
 
 async function buildPayment(
 	context: IExecuteFunctions,
 	node: INode,
 	itemIndex: number,
+	sourceAccounts: SourceAccounts,
 ): Promise<IDataObject> {
 	const networkName = readNetwork(context, node, itemIndex);
 	const horizon = horizonFor(
@@ -127,21 +169,14 @@ async function buildPayment(
 		itemIndex,
 	);
 
-	// The address goes in the description: n8n replaces a message that happens to contain one of
-	// Node's error codes, and an address can.
-	const account = await findAccount(
+	const account = await sourceAccountFor(
 		node,
 		horizon,
+		sourceAccounts,
+		networkName,
 		sourceAccount,
-		"Couldn't read the source account",
 		itemIndex,
 	);
-	if (account === undefined) {
-		throw new NodeOperationError(node, `The source account doesn't exist on ${networkName}`, {
-			itemIndex,
-			description: `Horizon has no account ${sourceAccount} on ${networkName}, so nothing was built. Check 'Source Account' and 'Network'. An account exists only after another account creates it with XLM; on testnet, Friendbot can create it.`,
-		});
-	}
 	// An M address is a user of its G account, which is the one on the network.
 	const receiverId = extractBaseAddress(destination);
 	const receiver = await findAccount(
