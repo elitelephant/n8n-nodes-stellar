@@ -127,8 +127,11 @@ In any run, open the **Links for judges** node to see the transaction hash and l
 stellar.expert and Horizon.
 
 One known limit: two runs of the payment workflow started by hand in the editor at the same time can
-collide: one of them comes out `uncertain` and its payment isn't applied, and its error explains
-why. The public form doesn't collide: it processes payments one after the other.
+collide: both build their transaction with the same sequence number of the payer account, so only
+one can get in. The other comes out `uncertain` and its payment isn't applied, and its error says
+so: "In this demo that usually means another payment from the same wallet went through at the same
+moment with the same sequence number." The public form doesn't collide: it processes payments one
+after the other.
 
 ## Run the demo
 
