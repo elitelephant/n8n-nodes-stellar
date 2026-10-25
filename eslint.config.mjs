@@ -4,9 +4,9 @@ import { configWithoutCloudSupport } from '@n8n/node-cli/eslint';
 // forbids runtime dependencies is turned off. Strict mode is off in package.json because
 // this file differs from the template's.
 export default [
-	// The Confidential Token SDK is third-party code, copied as upstream wrote it
-	// (vendor/stellar-confidential-token-sdk/VENDORED.md). The rules for node code don't apply to it.
-	{ ignores: ['vendor/**'] },
+	// The Confidential Token SDK is third-party code, copied with the few changes its VENDORED.md
+	// lists. The rules for node code don't apply to it; the files the package adds there are linted.
+	{ ignores: ['vendor/stellar-confidential-token-sdk/src/**'] },
 	...configWithoutCloudSupport,
 	{
 		files: ['package.json'],

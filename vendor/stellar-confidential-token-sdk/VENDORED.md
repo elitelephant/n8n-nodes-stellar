@@ -18,17 +18,51 @@ MUST-level requirements of the `stellar-confidential` SDK specification that it 
 
 ## What is copied
 
-`src/`, `circuits/`, `LICENSE` and `README.md`, from that commit, as upstream wrote them. The tests,
-scripts, `package.json` and lock file stay upstream. The SDK was tested with these runtime
-dependencies:
+`src/`, `circuits/`, `LICENSE` and `README.md`, from that commit. The tests, scripts, `package.json`
+and lock file stay upstream. Upstream's runtime dependencies are in the package's `package.json`,
+pinned to the versions the SDK was tested with:
 
-| Dependency              | Version       |
-| ----------------------- | ------------- |
-| `@aztec/bb.js`          | 0.87.0        |
-| `@noir-lang/noir_js`    | 1.0.0-beta.11 |
-| `@noble/curves`         | 1.9.7         |
-| `@noble/hashes`         | 1.8.0         |
-| `@zkpassport/poseidon2` | 0.6.2         |
-| `@stellar/stellar-sdk`  | 14.6.1        |
+| Dependency              | Version                               |
+| ----------------------- | ------------------------------------- |
+| `@aztec/bb.js`          | 0.87.0                                |
+| `@noir-lang/noir_js`    | 1.0.0-beta.11                         |
+| `@noble/curves`         | 1.9.7                                 |
+| `@noble/hashes`         | 1.8.0                                 |
+| `@zkpassport/poseidon2` | 0.6.2                                 |
+| `@stellar/stellar-sdk`  | 14.6.1, installed as `stellar-sdk-14` |
 
-The folder is left out of ESLint and Prettier, so the copy stays as upstream wrote it.
+The Stellar Signer and the other nodes use `@stellar/stellar-sdk` 17.1.0. This SDK keeps 14.6.1, so
+the package installs both, and this copy imports the old one through the npm alias `stellar-sdk-14`.
+
+With this SDK in the package, npm puts `@noble/hashes` 1.8.0 at the top of `node_modules`, where
+2.4.0 was before. `@stellar/stellar-sdk` 17.1.0 gets its own 2.4.0, and `@exodus/bytes`, which
+17.1.0 uses and which accepts either major version, now resolves 1.8.0.
+
+## How it is built
+
+The package's own `tsc` compiles `src/` to CommonJS in
+`dist/vendor/stellar-confidential-token-sdk/`, together with the circuit JSON files, so
+`npm run build` builds it and the nodes load it with `require()`. Upstream publishes ES modules
+only, and its `exports` map has no `require` condition. The package compiles with `target: es2020`
+(it was `es2019`), because the SDK uses `bigint` literals. That target applies to every node in the
+package. `circuits/vks/*.vk.bin` are not copied to `dist`: they are the verification keys a
+deployment registers on the verifier contract, and the SDK does not read them.
+
+The published package carries the compiled SDK in `dist`, and this folder's `LICENSE` and
+`VENDORED.md` through `files` in `package.json`, as the MIT license asks.
+
+ESLint and Prettier skip the copied files, so they keep upstream's style and the diff against
+upstream stays as short as the list below. `VENDORED.md` and `additions/` are checked like the rest
+of the package.
+
+## Changes from upstream
+
+Only these. Any other difference from the upstream commit is a mistake. Each changed line in `src/`
+carries a comment that starts with `n8n-nodes-stellar:`.
+
+- `src/chain/{admin,client,contract,events,factory,payload}.ts`: `@stellar/stellar-sdk` is imported
+  as `stellar-sdk-14`.
+- `src/proving/artifacts.ts`: the circuits folder is found with `__dirname` instead of
+  `import.meta.url`, which CommonJS does not have.
+- `additions/globals.d.ts`, added: types for the two browser globals the SDK names, `crypto` and
+  `localStorage`, because the package compiles without the DOM library.

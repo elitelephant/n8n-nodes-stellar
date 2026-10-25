@@ -19,7 +19,7 @@
  * `examples/confidential/factory/src/contract.rs`.
  */
 
-import { xdr, Address } from "@stellar/stellar-sdk";
+import { xdr, Address } from "stellar-sdk-14"; // n8n-nodes-stellar: the 14.6.1 alias (VENDORED.md).
 
 import type { ChainClient, Signer } from "./client.js";
 import { scvStruct } from "./payload.js";

@@ -12,8 +12,7 @@
  */
 
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import type { CompiledCircuit } from "@noir-lang/noir_js";
 
 export type CircuitName =
@@ -24,7 +23,8 @@ export type CircuitName =
   | "spender_transfer"
   | "clawback";
 
-const circuitsDir = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "circuits");
+// n8n-nodes-stellar: compiled to CommonJS, so `__dirname` replaces `import.meta.url` (VENDORED.md).
+const circuitsDir = join(__dirname, "..", "..", "circuits");
 
 /** Synchronously load a compiled circuit by name (Node only). */
 export function loadCircuit(name: CircuitName): CompiledCircuit {

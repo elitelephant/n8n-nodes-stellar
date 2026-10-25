@@ -7,7 +7,7 @@
  * proof binds the confidential debit/credit to the same value.
  */
 
-import { xdr, Address, nativeToScVal } from "@stellar/stellar-sdk";
+import { xdr, Address, nativeToScVal } from "stellar-sdk-14"; // n8n-nodes-stellar: the 14.6.1 alias (VENDORED.md).
 
 import type { ChainClient, Signer, InvokeResult } from "./client.js";
 import {

@@ -16,7 +16,7 @@
  * `scvBytes( ScVal(<XDR of the {payload, proof} map>) )`.
  */
 
-import { xdr } from "@stellar/stellar-sdk";
+import { xdr } from "stellar-sdk-14"; // n8n-nodes-stellar: the 14.6.1 alias (VENDORED.md).
 
 import { pointToBytes, type Point } from "../crypto/grumpkin.js";
 import { toBytes32BE } from "../crypto/field.js";

@@ -5,3 +5,4 @@ LICENSE.md
 # package adds there are formatted.
 vendor/stellar-confidential-token-sdk/*
 !vendor/stellar-confidential-token-sdk/VENDORED.md
+!vendor/stellar-confidential-token-sdk/additions/

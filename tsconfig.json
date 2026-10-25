@@ -3,7 +3,7 @@
 		"strict": true,
 		"module": "commonjs",
 		"moduleResolution": "node",
-		"target": "es2019",
+		"target": "es2020",
 		"lib": ["es2019", "es2020", "es2022.error"],
 		"removeComments": true,
 		"useUnknownInCatchVariables": false,
@@ -21,5 +21,13 @@
 		"skipLibCheck": true,
 		"outDir": "./dist/"
 	},
-	"include": ["credentials/**/*", "nodes/**/*", "nodes/**/*.json", "package.json"]
+	"include": [
+		"credentials/**/*",
+		"nodes/**/*",
+		"nodes/**/*.json",
+		"vendor/stellar-confidential-token-sdk/src/**/*",
+		"vendor/stellar-confidential-token-sdk/additions/*.d.ts",
+		"vendor/stellar-confidential-token-sdk/circuits/**/*.json",
+		"package.json"
+	]
 }

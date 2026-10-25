@@ -21,7 +21,7 @@
  * since a renamed field surfaces only as a runtime "missing field" throw.
  */
 
-import { xdr, Address, scValToNative, rpc } from "@stellar/stellar-sdk";
+import { xdr, Address, scValToNative, rpc } from "stellar-sdk-14"; // n8n-nodes-stellar: the 14.6.1 alias (VENDORED.md).
 
 import { fromBytesBE, toHex32 } from "../crypto/field.js";
 import { pointFromBytes, pointCoords, type Point } from "../crypto/grumpkin.js";

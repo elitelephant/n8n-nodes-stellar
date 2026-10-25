@@ -16,7 +16,7 @@ import {
   TransactionBuilder,
   BASE_FEE,
   rpc,
-} from "@stellar/stellar-sdk";
+} from "stellar-sdk-14"; // n8n-nodes-stellar: the 14.6.1 alias (VENDORED.md).
 
 import { pointFromBytes, type Point } from "../crypto/grumpkin.js";
 import { fromBytesBE } from "../crypto/field.js";
