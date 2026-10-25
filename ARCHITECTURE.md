@@ -79,9 +79,10 @@ which is the limit of **Payment › Batch**.
 
 <!-- CT-STATUS: this section describes the node as of commit 53a0d1a (Register). -->
 
-- The holder's keys for the token come from a SEP-53 signature of the holder's Stellar key, as the
-  key derivation of OpenZeppelin's SDK specification asks: the node signs twice, checks that both
-  signatures match and verify, and never stores them. They are made again on every run.
+- The holder's keys for the token come from a SEP-53 signature of the holder's Stellar key. The
+  copied SDK's key derivation (`vendor/stellar-confidential-token-sdk/src/crypto/sk-derivation.ts`)
+  asks a caller that signs to verify the signature, obtain it twice and never persist it. The node
+  does that, and makes the signature again on every run.
 - The account's state, which holds the openings of its confidential balances, goes into one file per
   token and account in the **State Folder**, encrypted with AES-256-GCM. The file's key comes from
   the same signature with a label of its own, so it is never the key that moves the balance.
@@ -91,7 +92,8 @@ which is the limit of **Payment › Batch**.
   its setup file (the CRS) from `crs.aztec.network` into the state folder.
 - Submissions go through the RPC and are judged like the Signer's: `rejected`, `not_submitted` or
   `uncertain`, with a look-up by hash before a result is called uncertain.
-- No error text carries an amount, a balance or a key.
+- The node is written so that no error text carries an amount, a balance or a key. No automated test
+  checks that yet.
 
 ## The Confidential Token deployment on Testnet
 
@@ -118,9 +120,8 @@ own. Its contract instances live until about 01-11-2026, unless their time to li
 | USDC             | `USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5` | `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` |
 
 The deployment's administrator, `GDDXGY7BO6WBN7ELKYIEGMLAXCIUB4SS6O27PEYXC32GUJVP5UYC64UE`, holds
-every role, as OpenZeppelin's deployment guide does on Testnet; the guide gives them to separate
-accounts in production. The tokens are compliant tokens: an account has to be on a token's allowlist
-to use it.
+every role in this test deployment. The tokens are compliant tokens: an account has to be on a
+token's allowlist to use it.
 
 ## Evidence on Testnet
 
@@ -144,8 +145,5 @@ skipped it, so it sent nothing.
 
 ## Testing status
 
-The [README](README.md#testing-status) has the full account. In short: up to commit `14888e1` the
-package has an automated suite of 879 tests, kept outside this repository; the Confidential Token
-work after it is tested only end to end on Testnet, as in the table above; the RPC's rare answers,
-the **RPC URL** rules and an automated check that no Confidential Token error carries a secret come
-after the event; and the Stellar Trigger wasn't seen polling inside n8n.
+What was and wasn't tested, and since which commit, is in the README's
+[testing status](README.md#testing-status). The transactions above are the Testnet evidence.
