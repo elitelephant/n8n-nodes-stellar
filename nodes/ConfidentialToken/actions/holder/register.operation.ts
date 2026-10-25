@@ -1,37 +1,19 @@
-import { mkdir } from 'node:fs/promises';
-
 import type { IExecuteFunctions, INode, INodeExecutionData, INodeProperties } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
 
 import {
 	buildRegisterWitness,
-	ChainClient,
 	keypairSigner,
 	pointToBytes,
-	StateEngine,
 	submitRegister,
-	type AccountState,
 } from '../../../../vendor/stellar-confidential-token-sdk/src';
 import { NETWORK_PASSPHRASES } from '../../../shared/network';
-import { holderKeys } from '../../keys';
 import { withProver } from '../../prover';
-import { EncryptedFileStore } from '../../state/encryptedStore';
 import { withAccountLock } from '../../state/lock';
-import { chainClientFor } from '../../transport/rpc';
-import {
-	forEachItem,
-	NETWORK_NAME,
-	readContract,
-	readNetwork,
-	readStateFolder,
-	readThreads,
-	stateErrorOf,
-} from '../common';
+import { forEachItem, NETWORK_NAME, stateErrorOf } from '../common';
+import { holderContext, ledgerOf, syncAfterSend, syncHolder, type SyncAfterSend } from './holder';
 
 const showFor = { show: { resource: ['holder'], operation: ['register'] } };
-
-// How far back the RPC keeps events when it doesn't say: about 7 days of ledgers (120,959 on testnet).
-const FALLBACK_RETENTION_LEDGERS = 120000;
 
 export const description: INodeProperties[] = [
 	{
@@ -58,26 +40,9 @@ export const description: INodeProperties[] = [
 // sent, so the registration is in the events it reads.
 export async function execute(this: IExecuteFunctions, node: INode): Promise<INodeExecutionData[]> {
 	return await forEachItem(this, node, async (itemIndex) => {
-		readNetwork(this, node, itemIndex);
-		const contracts = {
-			token: readContract(this, node, 'confidentialContract', 'Token Contract', itemIndex),
-			verifier: readContract(this, node, 'verifierContract', 'Verifier Contract', itemIndex),
-			auditor: readContract(this, node, 'auditorContract', 'Auditor Contract', itemIndex),
-		};
 		const auditorId = readAuditorId(this, node, itemIndex);
-		const threads = readThreads(this, node, itemIndex);
-		const folder = readStateFolder(this, itemIndex);
-		const secretKey = await readSecretKey(this, node, itemIndex);
-
-		const client = chainClientFor(
-			node,
-			this.getNodeParameter('rpcUrl', itemIndex, ''),
-			contracts,
-			itemIndex,
-		);
-		const { account, keys, stateKey } = holderKeys(node, secretKey, contracts.token, itemIndex);
-		const store = new EncryptedFileStore(folder, contracts.token, stateKey);
-		await mkdir(folder, { recursive: true });
+		const holder = await holderContext(this, node, itemIndex);
+		const { client, account, keys, contracts, folder, threads, secretKey } = holder;
 
 		try {
 			return await withAccountLock(folder, contracts.token, account, async () => {
@@ -101,8 +66,8 @@ export async function execute(this: IExecuteFunctions, node: INode): Promise<INo
 						proof,
 					);
 					const ledger = await ledgerOf(client, sent);
-					const state = await syncState(client, store, keys, account, fromLedger);
-					return output(account, contracts.token, false, sent.hash, ledger, state);
+					const synced = await syncAfterSend(holder, { fromLedger });
+					return output(account, contracts.token, false, sent.hash, ledger, synced);
 				}
 
 				// The account is registered. If its key is the one this credential derives, there is
@@ -121,9 +86,11 @@ export async function execute(this: IExecuteFunctions, node: INode): Promise<INo
 						},
 					);
 				}
-				const fromLedger = await oldestLedger(client);
-				const state = await syncState(client, store, keys, account, fromLedger);
-				return output(account, contracts.token, true, null, null, state);
+				const { state, syncWarning } = await syncHolder(holder);
+				return output(account, contracts.token, true, null, null, {
+					syncedLedger: state.syncedLedger,
+					syncWarning,
+				});
 			});
 		} catch (error) {
 			throw stateErrorOf(node, error, itemIndex) ?? error;
@@ -142,56 +109,8 @@ function readAuditorId(context: IExecuteFunctions, node: INode, itemIndex: numbe
 	return value;
 }
 
-// The credential's secret key. Its text never goes into an error.
-async function readSecretKey(
-	context: IExecuteFunctions,
-	node: INode,
-	itemIndex: number,
-): Promise<string> {
-	const credentials = await context.getCredentials('confidentialTokenHolderApi');
-	const { secretKey } = credentials;
-	if (typeof secretKey !== 'string' || secretKey.trim() === '') {
-		throw new NodeOperationError(node, "The credential's 'Secret Key' is empty", {
-			itemIndex,
-			description: 'Enter the secret key of a Stellar account in the credential.',
-		});
-	}
-	return secretKey.trim();
-}
-
 function sameKey(a: Uint8Array, b: Uint8Array): boolean {
 	return Buffer.from(a).equals(Buffer.from(b));
-}
-
-// The first ledger a sync can read events from: the oldest one the RPC keeps.
-async function oldestLedger(client: ChainClient): Promise<number> {
-	const health = await client.server.getHealth();
-	const oldest = (health as { oldestLedger?: unknown }).oldestLedger;
-	if (typeof oldest === 'number' && oldest > 0) {
-		return oldest;
-	}
-	return Math.max(1, health.latestLedger - FALLBACK_RETENTION_LEDGERS);
-}
-
-// The ledger of a confirmed transaction: the one the SDK reports, or the RPC's record of it.
-async function ledgerOf(client: ChainClient, sent: { hash: string }): Promise<number | null> {
-	const known = (sent as { ledger?: unknown }).ledger;
-	if (typeof known === 'number' && known > 0) {
-		return known;
-	}
-	const found = await client.server.getTransaction(sent.hash);
-	const ledger = (found as { ledger?: unknown }).ledger;
-	return typeof ledger === 'number' && ledger > 0 ? ledger : null;
-}
-
-async function syncState(
-	client: ChainClient,
-	store: EncryptedFileStore,
-	keys: ConstructorParameters<typeof StateEngine>[0]['keys'],
-	account: string,
-	fromLedger: number,
-): Promise<AccountState> {
-	return await new StateEngine({ client, store, keys, address: account, fromLedger }).sync();
 }
 
 function output(
@@ -200,7 +119,7 @@ function output(
 	alreadyRegistered: boolean,
 	txHash: string | null,
 	ledger: number | null,
-	state: AccountState,
+	synced: SyncAfterSend,
 ) {
 	return {
 		account,
@@ -209,7 +128,8 @@ function output(
 		alreadyRegistered,
 		txHash,
 		ledger,
-		syncedLedger: state.syncedLedger,
+		syncedLedger: synced.syncedLedger,
+		syncWarning: synced.syncWarning,
 		networkName: NETWORK_NAME,
 	};
 }
