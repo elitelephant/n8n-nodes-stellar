@@ -7,7 +7,7 @@ import type {
 } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
 import {
-	Asset,
+	type Asset,
 	extractBaseAddress,
 	type Horizon,
 	Memo,
@@ -17,6 +17,7 @@ import {
 } from '@stellar/stellar-sdk';
 
 import { toAmount } from '../../../shared/amount';
+import { assetName, toAsset } from '../../../shared/asset';
 import { NETWORK_PASSPHRASES, type NetworkName } from '../../../shared/network';
 import { baseFee, findAccount, horizonFor, timeboundsFor } from '../../transport/horizon';
 import { readNetwork } from '../common';
@@ -54,6 +55,17 @@ export const description: INodeProperties[] = [
 			'The account that receives the payment: a G address, or the M address of one of its users. It has to exist on the network.',
 	},
 	{
+		displayName: 'Asset',
+		name: 'asset',
+		type: 'string',
+		required: true,
+		default: 'XLM',
+		placeholder: 'e.g. USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
+		displayOptions: showFor,
+		description:
+			"The asset to send: XLM or native for lumens, or CODE:ISSUER for another asset. The destination needs a trustline for an asset that isn't XLM.",
+	},
+	{
 		displayName: 'Amount',
 		name: 'amount',
 		type: 'string',
@@ -61,7 +73,7 @@ export const description: INodeProperties[] = [
 		default: '',
 		placeholder: 'e.g. 25.5',
 		displayOptions: showFor,
-		description: 'How much XLM to send, with up to 7 decimals',
+		description: 'How much of the asset to send, with up to 7 decimals',
 	},
 	{
 		displayName: 'Memo',
@@ -88,10 +100,11 @@ export const description: INodeProperties[] = [
 	},
 ];
 
-// Builds one unsigned payment in XLM per item for the Stellar Signer. Each source account is read
-// from Horizon once per run, and every payment from it takes the next sequence number, in the
-// order of the items. So a run with one transaction per invoice gets in whole when the Signer
-// submits them in that order. A payment that fails before it is built takes no number.
+// Builds one unsigned payment per item for the Stellar Signer, in XLM or in an issued asset. Each
+// source account is read from Horizon once per run, and every payment from it takes the next
+// sequence number, in the order of the items. So a run with one transaction per invoice gets in
+// whole when the Signer submits them in that order. A payment that fails before it is built takes
+// no number.
 export async function execute(this: IExecuteFunctions, node: INode): Promise<INodeExecutionData[]> {
 	const sourceAccounts: SourceAccounts = new Map();
 	return await forEachItem(
@@ -161,6 +174,7 @@ async function buildPayment(
 		context.getNodeParameter('destination', itemIndex),
 		itemIndex,
 	);
+	const asset = readAsset(node, context.getNodeParameter('asset', itemIndex, 'XLM'), itemIndex);
 	const amount = readAmount(node, context.getNodeParameter('amount', itemIndex), itemIndex);
 	const memo = readMemo(node, context.getNodeParameter('memo', itemIndex, ''), itemIndex);
 	const timeLimit = readTimeLimit(
@@ -192,6 +206,14 @@ async function buildPayment(
 			description: `Horizon has no account ${receiverId} on ${networkName}, so nothing was built. A payment can't create an account: create it first with a create account operation that sends it XLM. Check 'Destination' and 'Network'.`,
 		});
 	}
+	if (!canReceive(receiver, receiverId, asset)) {
+		// The asset goes in the description: n8n replaces a message that happens to contain one of
+		// Node's error codes, and an asset code such as EPERM is one.
+		throw new NodeOperationError(node, 'The destination has no trustline for this asset', {
+			itemIndex,
+			description: `Account ${receiverId} on ${networkName} has no trustline for ${assetName(asset)}, so nothing was built. The network rejects a payment in an asset that the destination doesn't trust. Ask the receiver to add a trustline to this asset first.`,
+		});
+	}
 	const memoRequired = requiresMemo(receiver, destination);
 	if (memoRequired && memo === undefined) {
 		throw new NodeOperationError(node, 'The destination requires a memo', {
@@ -206,7 +228,7 @@ async function buildPayment(
 		fee: String(fee),
 		networkPassphrase: NETWORK_PASSPHRASES[networkName],
 		timebounds,
-	}).addOperation(Operation.payment({ destination, asset: Asset.native(), amount }));
+	}).addOperation(Operation.payment({ destination, asset, amount }));
 	if (memo !== undefined) {
 		builder.addMemo(Memo.text(memo));
 	}
@@ -224,6 +246,8 @@ async function buildPayment(
 		// Only an account that exists gets this far.
 		destinationExists: true,
 		memoRequired,
+		// Only a destination that can receive the asset gets this far.
+		hasTrustline: true,
 	};
 }
 
@@ -234,7 +258,7 @@ function readAmount(node: INode, value: unknown, itemIndex: number): string {
 		throw new NodeOperationError(node, "'Amount' must be a positive number with up to 7 decimals", {
 			itemIndex,
 			description:
-				'Enter how much XLM to send, for example 25 or 25.5. Stellar amounts have at most 7 digits after the decimal point.',
+				'Enter how much of the asset to send, for example 25 or 25.5. Stellar amounts have at most 7 digits after the decimal point.',
 		});
 	}
 	return amount;
@@ -314,4 +338,32 @@ function readDestination(node: INode, value: unknown, itemIndex: number): string
 		});
 	}
 	return value;
+}
+
+// The asset to send. It is checked before any request to Horizon. Spaces around it, as a sheet can
+// leave, don't count, as in the Stellar Signer's policy.
+function readAsset(node: INode, value: unknown, itemIndex: number): Asset {
+	const asset = toAsset(typeof value === 'string' ? value.trim() : value);
+	if (asset === undefined) {
+		throw new NodeOperationError(node, "'Asset' isn't a valid Stellar asset", {
+			itemIndex,
+			description:
+				'Write XLM or native for lumens, or CODE:ISSUER for another asset: its code, a colon, and the address of the account that issues it, for example USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN.',
+		});
+	}
+	return asset;
+}
+
+// Whether the destination account can receive the asset: lumens always, an issued asset only with a
+// trustline for it, except for its issuer, which doesn't hold its own asset.
+function canReceive(receiver: Horizon.AccountResponse, receiverId: string, asset: Asset): boolean {
+	if (asset.isNative() || asset.getIssuer() === receiverId) {
+		return true;
+	}
+	return receiver.balances.some(
+		(line) =>
+			(line.asset_type === 'credit_alphanum4' || line.asset_type === 'credit_alphanum12') &&
+			line.asset_code === asset.getCode() &&
+			line.asset_issuer === asset.getIssuer(),
+	);
 }
