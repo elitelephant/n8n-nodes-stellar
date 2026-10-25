@@ -47,6 +47,9 @@ nodes use SDF's servers: `horizon-testnet.stellar.org` and `horizon.stellar.org`
 | Stellar Trigger › Payment Received  | The account's payments, joined with their transactions, from a saved cursor                                                              | Nothing                                                                             |
 | Stellar Trigger › Balance Below     | The account and the last ledger (Horizon)                                                                                                | Nothing                                                                             |
 | Confidential Token › Register       | The account's confidential balance (a simulation of `confidential_balance`), then the token's events to rebuild its state (RPC)          | A zero-knowledge proof made locally, and a `register` contract call sent by the RPC |
+| Confidential Token › Deposit        | That the account is registered, and the token's underlying asset (RPC)                                                                   | A `deposit` contract call, without a proof                                          |
+| Confidential Token › Merge          | That the account is registered (RPC)                                                                                                     | A `merge` contract call, without a proof                                            |
+| Confidential Token › Get Balance    | The token's events since the last sync, and the account's confidential balance to check the rebuilt state against it (RPC)               | Nothing                                                                             |
 
 A Stellar transaction holds up to 100 operations
 ([Stellar docs](https://developers.stellar.org/docs/learn/fundamentals/fees-resource-limits-metering#inclusion-fee)),
@@ -77,7 +80,8 @@ which is the limit of **Payment › Batch**.
 
 ## How the Confidential Token node keeps its secrets
 
-<!-- CT-STATUS: this section describes the node as of commit 53a0d1a (Register). -->
+<!-- CT-STATUS: this section describes the node as of commit 751e624 (Register, Deposit, Merge and
+Get Balance). -->
 
 - The holder's keys for the token come from a SEP-53 signature of the holder's Stellar key. The
   copied SDK's key derivation (`vendor/stellar-confidential-token-sdk/src/crypto/sk-derivation.ts`)
@@ -136,9 +140,12 @@ at `https://horizon-testnet.stellar.org/transactions/<hash>`.
 | The deployment's test holder registers in the token over XLM                                                               | The deployment script                        | `c12d35add940d83d5ae430e93c98a613d60b99f3d79a280dbc35a598da819b83` | 5386029 |
 | **Register** of a new, allowed account in the token over XLM, by the end-to-end Testnet test                               | The test harness, on the compiled node       | `be6a2337c4c940f3763aee1973b9bd76bb21d46c411edd5e0a103c5d4a8efb6b` | 5387994 |
 | An account registered with another key, set up so that **Register** with this credential fails without sending anything    | The SDK, as the test's setup                 | `7a795c70b1a3b1b236e609370d0d9aac2f4b81fdb705f81151bf133fab29af7a` | 5387998 |
+| The end-to-end Testnet test of the balance, step 1: **Register** of a new account                                          | The test harness, on the compiled node       | `08ff71e6a893e8ef21f45d7ff6644b4b236d8e32286ee72b3fa573640d5b8170` | 5388343 |
+| The same test, step 2: **Deposit** of 25 XLM                                                                               | The test harness, on the compiled node       | `cc43547f34dd7c9db245cbb395245d7e23b31e3d7112c33a896c52c06559e0c8` | 5388345 |
+| The same test, step 3: **Merge**                                                                                           | The test harness, on the compiled node       | `c600ea6d5bc034e55127f43b1628337e863892d6055029def9024deec32308df` | 5388347 |
 
-<!-- CT-STATUS: add the Testnet transactions of Deposit, Merge, Get Balance, Transfer and Withdraw
-here as tickets #94 and #95 close. -->
+<!-- CT-STATUS: add the Testnet transactions of Transfer and Withdraw
+here as ticket #95 closes. -->
 
 A second run of the demo with the same invoice found it paid with **Payment › Check Paid** and
 skipped it, so it sent nothing.
