@@ -6,12 +6,12 @@ transactions that show them working. The [README](README.md) describes each node
 
 ## The nodes and the Stellar APIs they use
 
-| Node                   | Stellar API                                                               | Holds a key                                                         |
-| ---------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| **Stellar Signer**     | [Horizon](https://developers.stellar.org/docs/data/apis/horizon)          | Yes: the **Stellar Wallet API** credential                          |
-| **Stellar**            | Horizon                                                                   | No                                                                  |
-| **Stellar Trigger**    | Horizon                                                                   | No                                                                  |
-| **Confidential Token** | [Stellar RPC](https://developers.stellar.org/docs/data/apis/rpc), Testnet | Yes: the **Confidential Token Holder API** credential (in progress) |
+| Node                   | Stellar API                                                               | Holds a key                                           |
+| ---------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------- |
+| **Stellar Signer**     | [Horizon](https://developers.stellar.org/docs/data/apis/horizon)          | Yes: the **Stellar Wallet API** credential            |
+| **Stellar**            | Horizon                                                                   | No                                                    |
+| **Stellar Trigger**    | Horizon                                                                   | No                                                    |
+| **Confidential Token** | [Stellar RPC](https://developers.stellar.org/docs/data/apis/rpc), Testnet | Yes: the **Confidential Token Holder API** credential |
 
 The Stellar Signer, the Stellar node and the Stellar Trigger work with classic payments, accounts
 and trustlines, which Horizon serves as accounts, payment records joined with their transactions,
@@ -34,22 +34,24 @@ nodes use SDF's servers: `horizon-testnet.stellar.org` and `horizon.stellar.org`
 
 ## What each operation reads and builds
 
-| Node › Operation                    | Reads (API)                                                                                                                              | Builds or sends                                                                     |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Stellar Signer › Sign Transaction   | With **Submit to Horizon**: the destination's `config.memo_required` (SEP-29), and the transaction by its hash after an uncertain result | Signs the XDR it receives; submits it to Horizon when asked                         |
-| Stellar Signer › Sign Message       | Nothing                                                                                                                                  | A SEP-53 signature                                                                  |
-| Stellar › Account › Get             | The account, and the last ledger for its base reserve (Horizon)                                                                          | Nothing                                                                             |
-| Stellar › Payment › Build           | The source account, the destination account (existence, trustline, SEP-29), the base fee and Horizon's time                              | One unsigned `payment` transaction per item                                         |
-| Stellar › Payment › Batch           | The same, once for the source and once per destination                                                                                   | One unsigned transaction with one `payment` operation per item, up to 100           |
-| Stellar › Payment › Check Paid      | The destination's latest payments, joined with their transactions for the memo                                                           | Nothing                                                                             |
-| Stellar › Payment › Get Transaction | The transaction by its hash                                                                                                              | Nothing                                                                             |
-| Stellar › Asset › Build Trustline   | The account, the base fee and Horizon's time                                                                                             | One unsigned `changeTrust` transaction per item                                     |
-| Stellar Trigger › Payment Received  | The account's payments, joined with their transactions, from a saved cursor                                                              | Nothing                                                                             |
-| Stellar Trigger › Balance Below     | The account and the last ledger (Horizon)                                                                                                | Nothing                                                                             |
-| Confidential Token › Register       | The account's confidential balance (a simulation of `confidential_balance`), then the token's events to rebuild its state (RPC)          | A zero-knowledge proof made locally, and a `register` contract call sent by the RPC |
-| Confidential Token › Deposit        | That the account is registered, and the token's underlying asset (RPC)                                                                   | A `deposit` contract call, without a proof                                          |
-| Confidential Token › Merge          | That the account is registered (RPC)                                                                                                     | A `merge` contract call, without a proof                                            |
-| Confidential Token › Get Balance    | The token's events since the last sync, and the account's confidential balance to check the rebuilt state against it (RPC)               | Nothing                                                                             |
+| Node › Operation                    | Reads (API)                                                                                                                              | Builds or sends                                                                                                                    |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Stellar Signer › Sign Transaction   | With **Submit to Horizon**: the destination's `config.memo_required` (SEP-29), and the transaction by its hash after an uncertain result | Signs the XDR it receives; submits it to Horizon when asked                                                                        |
+| Stellar Signer › Sign Message       | Nothing                                                                                                                                  | A SEP-53 signature                                                                                                                 |
+| Stellar › Account › Get             | The account, and the last ledger for its base reserve (Horizon)                                                                          | Nothing                                                                                                                            |
+| Stellar › Payment › Build           | The source account, the destination account (existence, trustline, SEP-29), the base fee and Horizon's time                              | One unsigned `payment` transaction per item                                                                                        |
+| Stellar › Payment › Batch           | The same, once for the source and once per destination                                                                                   | One unsigned transaction with one `payment` operation per item, up to 100                                                          |
+| Stellar › Payment › Check Paid      | The destination's latest payments, joined with their transactions for the memo                                                           | Nothing                                                                                                                            |
+| Stellar › Payment › Get Transaction | The transaction by its hash                                                                                                              | Nothing                                                                                                                            |
+| Stellar › Asset › Build Trustline   | The account, the base fee and Horizon's time                                                                                             | One unsigned `changeTrust` transaction per item                                                                                    |
+| Stellar Trigger › Payment Received  | The account's payments, joined with their transactions, from a saved cursor                                                              | Nothing                                                                                                                            |
+| Stellar Trigger › Balance Below     | The account and the last ledger (Horizon)                                                                                                | Nothing                                                                                                                            |
+| Confidential Token › Register       | The account's confidential balance (a simulation of `confidential_balance`), then the token's events to rebuild its state (RPC)          | A zero-knowledge proof made locally, and a `register` contract call sent by the RPC                                                |
+| Confidential Token › Deposit        | That the account is registered, and the token's underlying asset (RPC)                                                                   | A `deposit` contract call, without a proof                                                                                         |
+| Confidential Token › Merge          | That the account is registered (RPC)                                                                                                     | A `merge` contract call, without a proof                                                                                           |
+| Confidential Token › Get Balance    | The token's events since the last sync, and the account's confidential balance to check the rebuilt state against it (RPC)               | Nothing                                                                                                                            |
+| Confidential Token › Transfer       | That the destination is registered, the account's state and balance, and the token's underlying asset (RPC)                              | A zero-knowledge proof made locally and a `confidential_transfer` contract call, after a `merge` if the spendable balance is short |
+| Confidential Token › Withdraw       | The account's state and balance, and the token's underlying asset (RPC)                                                                  | A zero-knowledge proof made locally and a `withdraw` contract call, after a `merge` if the spendable balance is short              |
 
 A Stellar transaction holds up to 100 operations
 ([Stellar docs](https://developers.stellar.org/docs/learn/fundamentals/fees-resource-limits-metering#inclusion-fee)),
@@ -79,9 +81,6 @@ which is the limit of **Payment › Batch**.
 | `vendor/stellar-confidential-token-sdk/` | A copy of the Stellar Confidential Token SDK, compiled with the package. [VENDORED.md](vendor/stellar-confidential-token-sdk/VENDORED.md) lists its origin and every change |
 
 ## How the Confidential Token node keeps its secrets
-
-<!-- CT-STATUS: this section describes the node as of commit 751e624 (Register, Deposit, Merge and
-Get Balance). -->
 
 - The holder's keys for the token come from a SEP-53 signature of the holder's Stellar key. The
   copied SDK's key derivation (`vendor/stellar-confidential-token-sdk/src/crypto/sk-derivation.ts`)
@@ -143,9 +142,15 @@ at `https://horizon-testnet.stellar.org/transactions/<hash>`.
 | The end-to-end Testnet test of the balance, step 1: **Register** of a new account                                          | The test harness, on the compiled node       | `08ff71e6a893e8ef21f45d7ff6644b4b236d8e32286ee72b3fa573640d5b8170` | 5388343 |
 | The same test, step 2: **Deposit** of 25 XLM                                                                               | The test harness, on the compiled node       | `cc43547f34dd7c9db245cbb395245d7e23b31e3d7112c33a896c52c06559e0c8` | 5388345 |
 | The same test, step 3: **Merge**                                                                                           | The test harness, on the compiled node       | `c600ea6d5bc034e55127f43b1628337e863892d6055029def9024deec32308df` | 5388347 |
-
-<!-- CT-STATUS: add the Testnet transactions of Transfer and Withdraw
-here as ticket #95 closes. -->
+| The end-to-end Testnet test of the whole flow, step 1: **Register** of account A                                           | The test harness, on the compiled node       | `71759131518e8fdd716cb3a152c979780037fd4fe780a4a2c3a29b616b83f7a5` | 5388587 |
+| Step 2: **Register** of account B                                                                                          | The test harness, on the compiled node       | `4beecc9fdb6c94fb4257099a0fbf5d26a6ee19340433679eb5b6fe5a7483404c` | 5388589 |
+| Step 3: **Deposit** of 25 XLM into A                                                                                       | The test harness, on the compiled node       | `7af173552fbf1a748e00f3e74c8ed13495e0a1834fbd0215d1872a5d3497b12d` | 5388591 |
+| Step 4: the automatic **Merge** of A before its transfer                                                                   | The test harness, on the compiled node       | `e71ee6805f37c427d1ed0972b988bd1362d5722e04472f9fe699e27069305f6e` | 5388593 |
+| Step 5: **Transfer** of 10 XLM from A to B                                                                                 | The test harness, on the compiled node       | `261283e8facf550ac7cff1d14855e83e39ba95017d958bc4fd45f14b7393394b` | 5388595 |
+| Step 6: **Merge** of B                                                                                                     | The test harness, on the compiled node       | `5c171a8acb9a134fbaaa2d60b3da602411ef238c7e6e87a7c451904562cae972` | 5388597 |
+| Step 7: **Withdraw** of 5 XLM from B                                                                                       | The test harness, on the compiled node       | `443d27f505b8be0fd939583063400fc6f793693d58bf4279443ba55114a29a28` | 5388599 |
+| Step 8: a run with two items of 1 XLM, first item                                                                          | The test harness, on the compiled node       | `e74228f0ffe0251722f96afefd1bd139cb08c6155d0d3b130bb585d6cd58a561` | 5388603 |
+| Step 8: second item                                                                                                        | The test harness, on the compiled node       | `7a03c291b56d9dc187c79c5b417da915eb44a750b9db4ff9a4ca1b4b6ee58d99` | 5388606 |
 
 A second run of the demo with the same invoice found it paid with **Payment › Check Paid** and
 skipped it, so it sent nothing.
