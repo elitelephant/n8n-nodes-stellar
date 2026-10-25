@@ -15,6 +15,8 @@
 		"Stellar"
 	],
 	"resources": {
-		"primaryDocumentation": [{ "url": "https://github.com/yripper/n8n-nodes-stellar" }]
+		"primaryDocumentation": [
+			{ "url": "https://github.com/elitelephant/n8n-nodes-stellar#confidential-token" }
+		]
 	}
 }

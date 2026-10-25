@@ -4,7 +4,7 @@ import { keypairSigner, submitMerge } from '../../../../vendor/stellar-confident
 import { NETWORK_PASSPHRASES } from '../../../shared/network';
 import { withAccountLock } from '../../state/lock';
 import { forEachItem, NETWORK_NAME, stateErrorOf } from '../common';
-import { holderContext, ledgerOf, requireRegistered, syncAfterSend } from './holder';
+import { holderContext, ledgerOf, requireRegistered, syncAfterSend, tokenInfo } from './holder';
 
 // Merge has no fields of its own.
 export const description: INodeProperties[] = [];
@@ -19,6 +19,8 @@ export async function execute(this: IExecuteFunctions, node: INode): Promise<INo
 		try {
 			return await withAccountLock(folder, contracts.token, account, async () => {
 				await requireRegistered(holder);
+				// Read before the send, as Deposit does: a failure here sends nothing.
+				const info = await tokenInfo(client, contracts.token, node, itemIndex);
 				const sent = await submitMerge(
 					client,
 					keypairSigner(secretKey, NETWORK_PASSPHRASES.testnet),
@@ -29,6 +31,7 @@ export async function execute(this: IExecuteFunctions, node: INode): Promise<INo
 				return {
 					account,
 					token: contracts.token,
+					asset: info.asset,
 					txHash: sent.hash,
 					ledger,
 					syncedLedger: synced.syncedLedger,
