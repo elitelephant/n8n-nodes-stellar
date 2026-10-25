@@ -22,6 +22,8 @@ import {
 	receivedTransfer,
 	type Transfer,
 } from '../Stellar/transport/horizon';
+import { balanceProperties, pollBalance } from './balanceBelowThreshold';
+import { memoryFor } from './memory';
 
 const POLLS_OVER_HTTPS =
 	"This node polls a Horizon server over https. Plain http is accepted only for localhost. Enter an https address, or leave the field empty to use SDF's server for the network.";
@@ -30,17 +32,6 @@ const POLLS_OVER_HTTPS =
 // one.
 const PAGE_SIZE = HORIZON_PAGE_SIZE;
 const MAX_PAGES = 10;
-
-// What the Trigger keeps between polls, in its static data: the cursor of the last record it read,
-// for which account and network. While the workflow is active, n8n keeps it in memory, and it saves
-// it to the database when a poll returns items, right after activation and when the workflow is
-// deactivated.
-interface TriggerMemory {
-	account?: string;
-	networkName?: NetworkName;
-	// A Horizon paging token, or FROM_START.
-	cursor?: string;
-}
 
 // The cursor that means "from the account's first record": the account had no records when the
 // Trigger started, so its create account operation is the first payment it gets.
@@ -57,7 +48,8 @@ export class StellarTrigger implements INodeType {
 		group: ['trigger'],
 		version: 1,
 		subtitle: '={{ $parameter["event"] }}',
-		description: 'Starts the workflow when a Stellar account receives a payment',
+		description:
+			'Starts the workflow when a Stellar account receives a payment, or when its balance goes below a threshold',
 		defaults: {
 			name: 'Stellar Trigger',
 		},
@@ -77,6 +69,12 @@ export class StellarTrigger implements INodeType {
 						description:
 							'A payment or path payment to the account, or the create account operation that creates it',
 					},
+					{
+						name: 'Balance Below Threshold',
+						value: 'balanceBelowThreshold',
+						description:
+							"The account's balance of an asset goes below a threshold. It fires once, and again only after the balance gets back to the threshold. A manual test has no memory: it returns the balance whenever it is below.",
+					},
 				],
 				default: 'paymentReceived',
 			},
@@ -88,7 +86,7 @@ export class StellarTrigger implements INodeType {
 				default: '',
 				placeholder: 'e.g. GABC...',
 				description:
-					"The public key of the account to watch, starting with G. The first poll starts from now and doesn't bring the account's history. A manual test returns the last payment it received.",
+					"The public key of the account to watch, starting with G. For Payment Received, the first poll starts from now and doesn't bring the account's history, and a manual test returns the last payment it received.",
 			},
 			{
 				displayName: 'Network',
@@ -117,6 +115,7 @@ export class StellarTrigger implements INodeType {
 				description:
 					"The Horizon server to poll, as an https address. Plain http works only for localhost, and the address can't have a user name or a password. Leave empty to use SDF's server for the network: horizon-testnet.stellar.org for testnet and horizon.stellar.org for public.",
 			},
+			...balanceProperties,
 			{
 				displayName: 'Filters',
 				name: 'filters',
@@ -159,6 +158,9 @@ export class StellarTrigger implements INodeType {
 			POLLS_OVER_HTTPS,
 		);
 		const account = readAccount(node, this.getNodeParameter('account', ''));
+		if (this.getNodeParameter('event', 'paymentReceived') === 'balanceBelowThreshold') {
+			return await pollBalance(this, node, horizon, account, networkName);
+		}
 		const filters = this.getNodeParameter('filters', {}) as IDataObject;
 		const filter: PaymentFilter = {
 			asset: readAssetFilter(node, filters.asset),
@@ -169,7 +171,7 @@ export class StellarTrigger implements INodeType {
 			return [[{ json: await lastPaymentReceived(node, horizon, account, networkName, filter) }]];
 		}
 
-		const memory = this.getWorkflowStaticData('node') as TriggerMemory;
+		const memory = memoryFor(this, 'paymentReceived');
 		if (memory.account !== account || memory.networkName !== networkName || !memory.cursor) {
 			// The first poll, or one after the account or the network changed, starts from now.
 			const cursor = await latestCursor(node, horizon, account);
