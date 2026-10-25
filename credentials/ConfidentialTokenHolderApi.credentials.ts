@@ -9,7 +9,8 @@ export class ConfidentialTokenHolderApi implements ICredentialType {
 		dark: 'file:../nodes/StellarSigner/stellarLogo.dark.svg',
 	};
 
-	documentationUrl = 'https://github.com/yripper/n8n-nodes-stellar#confidential-token';
+	documentationUrl =
+		'https://github.com/elitelephant/n8n-nodes-stellar#confidential-token-holder-api';
 
 	properties: INodeProperties[] = [
 		// OpenZeppelin, sdk-spec/key-derivation.md v0.8.0 (copy in anexos/evidencia-confidential-token-25-10,
