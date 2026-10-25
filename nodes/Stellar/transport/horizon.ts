@@ -8,12 +8,14 @@ import type { NetworkName } from '../../shared/network';
 const READS_OVER_HTTPS =
 	"This node reads from a Horizon server over https. Plain http is accepted only for localhost. Enter an https address, or leave the field empty to use SDF's server for the network.";
 
-// The Horizon client for an item, with the shared rules for Horizon URL.
+// The Horizon client for an item, with the shared rules for Horizon URL. The Stellar Trigger reads
+// Horizon the same way as the Stellar node, so it uses this transport too, with its own client and
+// no item index: a trigger has no items.
 export function horizonFor(
 	node: INode,
 	networkName: NetworkName,
 	horizonUrl: unknown,
-	itemIndex: number,
+	itemIndex: number | undefined,
 ): Horizon.Server {
 	return horizonClientFor(node, networkName, horizonUrl, itemIndex, READS_OVER_HTTPS);
 }
@@ -25,7 +27,7 @@ export async function findAccount(
 	horizon: Horizon.Server,
 	accountId: string,
 	failure: string,
-	itemIndex: number,
+	itemIndex: number | undefined,
 ): Promise<Horizon.AccountResponse | undefined> {
 	return await unlessMissing(
 		node,
@@ -42,7 +44,7 @@ export async function findTransaction(
 	horizon: Horizon.Server,
 	txHash: string,
 	failure: string,
-	itemIndex: number,
+	itemIndex: number | undefined,
 ): Promise<Horizon.ServerApi.TransactionRecord | undefined> {
 	return await unlessMissing(
 		node,
@@ -61,7 +63,7 @@ async function unlessMissing<T>(
 	horizon: Horizon.Server,
 	request: () => Promise<T>,
 	failure: string,
-	itemIndex: number,
+	itemIndex: number | undefined,
 ): Promise<T | undefined> {
 	try {
 		return await request();
@@ -73,12 +75,47 @@ async function unlessMissing<T>(
 	}
 }
 
+// What Horizon lists under an account's payments: payments, path payments, account creations and
+// merges, and contract calls.
+export type PaymentsPage = Awaited<ReturnType<ReturnType<Horizon.Server['payments']>['call']>>;
+
+// Which page of an account's payments to read. Without a cursor, the page starts at the first or the
+// last record, by its order.
+export interface PaymentsQuery {
+	order: 'asc' | 'desc';
+	limit: number;
+	cursor?: string;
+}
+
+// One page of the operations that moved funds to or from an account, as Horizon lists them under its
+// payments, with each transaction joined so its memo is there. Undefined if the network doesn't have
+// the account.
+export async function findPayments(
+	node: INode,
+	horizon: Horizon.Server,
+	accountId: string,
+	page: PaymentsQuery,
+	failure: string,
+	itemIndex: number | undefined,
+): Promise<PaymentsPage | undefined> {
+	const request = horizon
+		.payments()
+		.forAccount(accountId)
+		.order(page.order)
+		.limit(page.limit)
+		.join('transactions');
+	if (page.cursor !== undefined) {
+		request.cursor(page.cursor);
+	}
+	return await unlessMissing(node, horizon, async () => await request.call(), failure, itemIndex);
+}
+
 // The base fee of the last ledger, per operation, in stroops. The SDK reads it from Horizon's
 // fee_stats and falls back to the network's minimum, 100, when the answer has none.
 export async function baseFee(
 	node: INode,
 	horizon: Horizon.Server,
-	itemIndex: number,
+	itemIndex: number | undefined,
 ): Promise<number> {
 	try {
 		return await horizon.fetchBaseFee();
@@ -94,7 +131,7 @@ export async function timeboundsFor(
 	node: INode,
 	horizon: Horizon.Server,
 	timeLimit: number,
-	itemIndex: number,
+	itemIndex: number | undefined,
 ): Promise<Horizon.Server.Timebounds> {
 	try {
 		return await horizon.fetchTimebounds(timeLimit);
@@ -110,7 +147,7 @@ function requestFailed(
 	horizon: Horizon.Server,
 	error: unknown,
 	message: string,
-	itemIndex: number,
+	itemIndex: number | undefined,
 ): NodeOperationError {
 	const host = horizon.serverURL.host;
 	let description = `Horizon at ${host} didn't answer. Check 'Horizon URL' and the connection, then run it again.`;

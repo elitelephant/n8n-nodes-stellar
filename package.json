@@ -50,7 +50,8 @@
     ],
     "nodes": [
       "dist/nodes/StellarSigner/StellarSigner.node.js",
-      "dist/nodes/Stellar/Stellar.node.js"
+      "dist/nodes/Stellar/Stellar.node.js",
+      "dist/nodes/StellarTrigger/StellarTrigger.node.js"
     ]
   },
   "devDependencies": {

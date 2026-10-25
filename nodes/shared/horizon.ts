@@ -13,7 +13,8 @@ const ENTER_HORIZON_URL =
 // The hosts that are this same machine, as Stellar Lab lists them.
 const LOCAL_HOSTNAMES = ['localhost', '127.0.0.1', '[::1]'];
 
-// The Horizon client for an item. A Horizon URL that can't be used fails the item here. A value
+// The Horizon client for an item, or for a trigger's poll, which has no item index. A Horizon URL
+// that can't be used fails the item here. A value
 // without text, such as an expression that gives nothing, counts as empty. The address must be
 // https. Plain http is accepted only for a server on this same machine, where nobody can sit
 // between the node and Horizon. The address can't carry a user name or a password. No error here
@@ -23,7 +24,7 @@ export function horizonClientFor(
 	node: INode,
 	networkName: NetworkName,
 	horizonUrl: unknown,
-	itemIndex: number,
+	itemIndex: number | undefined,
 	notHttpsDescription: string,
 ): Horizon.Server {
 	const url = horizonUrlFor(networkName, String(horizonUrl ?? ''));
