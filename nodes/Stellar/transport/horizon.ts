@@ -18,27 +18,23 @@ export function horizonFor(
 	return horizonClientFor(node, networkName, horizonUrl, itemIndex, READS_OVER_HTTPS);
 }
 
-// The account as Horizon has it now, with its sequence number. An account that doesn't exist on
-// the network fails the item with a text of its own. The address goes in the description: n8n
-// replaces a message that happens to contain one of Node's error codes, and an address can.
-export async function loadSourceAccount(
+// An account as Horizon has it now, with its sequence number and its data, or undefined if the
+// network doesn't have it. Only Horizon's own not_found says so: the SDK gives the same error for
+// any 404, also one from a server that isn't Horizon.
+export async function findAccount(
 	node: INode,
 	horizon: Horizon.Server,
 	accountId: string,
-	networkName: NetworkName,
+	failure: string,
 	itemIndex: number,
-): Promise<Horizon.AccountResponse> {
+): Promise<Horizon.AccountResponse | undefined> {
 	try {
 		return await horizon.loadAccount(accountId);
 	} catch (error) {
-		if (error instanceof NotFoundError) {
-			throw new NodeOperationError(node, error, {
-				itemIndex,
-				message: `The source account doesn't exist on ${networkName}`,
-				description: `Horizon has no account ${accountId} on ${networkName}, so nothing was built. Check 'Source Account' and 'Network'. An account exists only after another account creates it with XLM; on testnet, Friendbot can create it.`,
-			});
+		if (error instanceof NotFoundError && horizonErrorType(error.getResponse()) === 'not_found') {
+			return undefined;
 		}
-		throw requestFailed(node, horizon, error, "Couldn't read the source account", itemIndex);
+		throw requestFailed(node, horizon, error, failure, itemIndex);
 	}
 }
 
@@ -82,12 +78,33 @@ function requestFailed(
 	itemIndex: number,
 ): NodeOperationError {
 	const host = horizon.serverURL.host;
+	let description = `Horizon at ${host} didn't answer. Check 'Horizon URL' and the connection, then run it again.`;
+	if (error instanceof NetworkError) {
+		description =
+			horizonErrorType(error.getResponse()) === undefined
+				? `The answer from ${host} doesn't look like Horizon's: check 'Horizon URL'.`
+				: `Horizon at ${host} answered with an error. Wait and run it again, or check 'Horizon URL'.`;
+	}
 	return new NodeOperationError(node, error instanceof Error ? error : message, {
 		itemIndex,
 		message,
-		description:
-			error instanceof NetworkError
-				? `Horizon at ${host} answered with an error. Wait and run it again, or check 'Horizon URL'.`
-				: `Horizon at ${host} didn't answer. Check 'Horizon URL' and the connection, then run it again.`,
+		description,
 	});
+}
+
+// Horizon names each of its errors with a type under this address.
+const HORIZON_ERROR_TYPES = 'https://stellar.org/horizon-errors/';
+
+// The name of a Horizon error, such as not_found, or undefined if the body isn't one of Horizon's.
+function horizonErrorType(body: unknown): string | undefined {
+	if (
+		typeof body === 'object' &&
+		body !== null &&
+		'type' in body &&
+		typeof body.type === 'string' &&
+		body.type.startsWith(HORIZON_ERROR_TYPES)
+	) {
+		return body.type.slice(HORIZON_ERROR_TYPES.length);
+	}
+	return undefined;
 }

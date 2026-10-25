@@ -1,13 +1,24 @@
 import type { IDataObject, IExecuteFunctions, INode, INodeProperties } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
-import { Asset, Memo, Operation, StrKey, TransactionBuilder } from '@stellar/stellar-sdk';
+import {
+	Asset,
+	extractBaseAddress,
+	type Horizon,
+	Memo,
+	Operation,
+	StrKey,
+	TransactionBuilder,
+} from '@stellar/stellar-sdk';
 
 import { toAmount } from '../../../shared/amount';
 import { NETWORK_PASSPHRASES } from '../../../shared/network';
-import { baseFee, horizonFor, loadSourceAccount, timeboundsFor } from '../../transport/horizon';
+import { baseFee, findAccount, horizonFor, timeboundsFor } from '../../transport/horizon';
 import { readNetwork } from '../common';
 
 const showFor = { show: { resource: ['payment'], operation: ['build'] } };
+
+// "1" in base64: the value of config.memo_required on an account that asks for a memo (SEP-29).
+const ACCOUNT_REQUIRES_MEMO = 'MQ==';
 
 // A text memo holds up to 28 bytes of UTF-8.
 const MEMO_TEXT_BYTES = 28;
@@ -32,7 +43,8 @@ export const description: INodeProperties[] = [
 		default: '',
 		placeholder: 'e.g. GABC...',
 		displayOptions: showFor,
-		description: 'The account that receives the payment',
+		description:
+			'The account that receives the payment: a G address, or the M address of one of its users. It has to exist on the network.',
 	},
 	{
 		displayName: 'Amount',
@@ -51,7 +63,7 @@ export const description: INodeProperties[] = [
 		default: '',
 		placeholder: 'e.g. INV-1001',
 		displayOptions: showFor,
-		description: `A text memo of up to ${MEMO_TEXT_BYTES} bytes, such as the invoice number the receiver uses to match the payment. Leave empty for no memo.`,
+		description: `A text memo of up to ${MEMO_TEXT_BYTES} bytes, such as the invoice number the receiver uses to match the payment. Leave empty for no memo, unless the destination asks for one (SEP-29).`,
 	},
 	{
 		displayName: 'Time Limit (Seconds)',
@@ -87,7 +99,11 @@ export async function execute(
 		this.getNodeParameter('sourceAccount', itemIndex),
 		itemIndex,
 	);
-	const destination = this.getNodeParameter('destination', itemIndex) as string;
+	const destination = readDestination(
+		node,
+		this.getNodeParameter('destination', itemIndex),
+		itemIndex,
+	);
 	const amount = readAmount(node, this.getNodeParameter('amount', itemIndex), itemIndex);
 	const memo = readMemo(node, this.getNodeParameter('memo', itemIndex, ''), itemIndex);
 	const timeLimit = readTimeLimit(
@@ -96,7 +112,43 @@ export async function execute(
 		itemIndex,
 	);
 
-	const account = await loadSourceAccount(node, horizon, sourceAccount, networkName, itemIndex);
+	// The address goes in the description: n8n replaces a message that happens to contain one of
+	// Node's error codes, and an address can.
+	const account = await findAccount(
+		node,
+		horizon,
+		sourceAccount,
+		"Couldn't read the source account",
+		itemIndex,
+	);
+	if (account === undefined) {
+		throw new NodeOperationError(node, `The source account doesn't exist on ${networkName}`, {
+			itemIndex,
+			description: `Horizon has no account ${sourceAccount} on ${networkName}, so nothing was built. Check 'Source Account' and 'Network'. An account exists only after another account creates it with XLM; on testnet, Friendbot can create it.`,
+		});
+	}
+	// An M address is a user of its G account, which is the one on the network.
+	const receiverId = extractBaseAddress(destination);
+	const receiver = await findAccount(
+		node,
+		horizon,
+		receiverId,
+		"Couldn't read the destination account",
+		itemIndex,
+	);
+	if (receiver === undefined) {
+		throw new NodeOperationError(node, `The destination account doesn't exist on ${networkName}`, {
+			itemIndex,
+			description: `Horizon has no account ${receiverId} on ${networkName}, so nothing was built. A payment can't create an account: create it first with a create account operation that sends it XLM. Check 'Destination' and 'Network'.`,
+		});
+	}
+	const memoRequired = requiresMemo(receiver, destination);
+	if (memoRequired && memo === undefined) {
+		throw new NodeOperationError(node, 'The destination requires a memo', {
+			itemIndex,
+			description: `Account ${destination} asks for a memo on every payment (SEP-29), and 'Memo' is empty, so nothing was built. Enter the memo that the receiver gave you, such as the reference of a deposit to an exchange.`,
+		});
+	}
 	const fee = await baseFee(node, horizon, itemIndex);
 	const timebounds = await timeboundsFor(node, horizon, timeLimit, itemIndex);
 
@@ -119,6 +171,9 @@ export async function execute(
 		fee: transaction.fee,
 		memo: memo ?? null,
 		networkName,
+		// Only an account that exists gets this far.
+		destinationExists: true,
+		memoRequired,
 	};
 }
 
@@ -182,6 +237,31 @@ function readTimeLimit(node: INode, value: unknown, itemIndex: number): number {
 					'Enter how many seconds the network accepts the transaction after it is built, for example 300 for five minutes.',
 			},
 		);
+	}
+	return value;
+}
+
+// Whether a payment to this destination needs a memo, as SEP-29 says: its account has the data entry
+// config.memo_required set to 1, which Horizon gives in base64. An M address already names the user
+// of the account, so it needs none, and the SDK's own check skips it too.
+function requiresMemo(receiver: Horizon.AccountResponse, destination: string): boolean {
+	return (
+		!StrKey.isValidMed25519PublicKey(destination) &&
+		receiver.data_attr['config.memo_required'] === ACCOUNT_REQUIRES_MEMO
+	);
+}
+
+// The account that receives the payment, as a G address or as an M address of one of its users.
+function readDestination(node: INode, value: unknown, itemIndex: number): string {
+	if (
+		typeof value !== 'string' ||
+		!(StrKey.isValidEd25519PublicKey(value) || StrKey.isValidMed25519PublicKey(value))
+	) {
+		throw new NodeOperationError(node, "'Destination' isn't a valid Stellar address", {
+			itemIndex,
+			description:
+				'Enter the address of the account that receives the payment: 56 characters starting with G, or 69 starting with M.',
+		});
 	}
 	return value;
 }
