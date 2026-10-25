@@ -1,4 +1,10 @@
-import type { IDataObject, IExecuteFunctions, INode, INodeProperties } from 'n8n-workflow';
+import type {
+	IDataObject,
+	IExecuteFunctions,
+	INode,
+	INodeExecutionData,
+	INodeProperties,
+} from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
 import {
 	Asset,
@@ -14,6 +20,7 @@ import { toAmount } from '../../../shared/amount';
 import { NETWORK_PASSPHRASES } from '../../../shared/network';
 import { baseFee, findAccount, horizonFor, timeboundsFor } from '../../transport/horizon';
 import { readNetwork } from '../common';
+import { forEachItem } from '../forEachItem';
 
 const showFor = { show: { resource: ['payment'], operation: ['build'] } };
 
@@ -81,34 +88,42 @@ export const description: INodeProperties[] = [
 	},
 ];
 
-// Builds one unsigned payment in XLM for the Stellar Signer.
-export async function execute(
-	this: IExecuteFunctions,
+// Builds one unsigned payment in XLM per item for the Stellar Signer.
+export async function execute(this: IExecuteFunctions, node: INode): Promise<INodeExecutionData[]> {
+	return await forEachItem(
+		this,
+		node,
+		async (itemIndex) => await buildPayment(this, node, itemIndex),
+	);
+}
+
+async function buildPayment(
+	context: IExecuteFunctions,
 	node: INode,
 	itemIndex: number,
 ): Promise<IDataObject> {
-	const networkName = readNetwork(this, node, itemIndex);
+	const networkName = readNetwork(context, node, itemIndex);
 	const horizon = horizonFor(
 		node,
 		networkName,
-		this.getNodeParameter('horizonUrl', itemIndex, ''),
+		context.getNodeParameter('horizonUrl', itemIndex, ''),
 		itemIndex,
 	);
 	const sourceAccount = readSourceAccount(
 		node,
-		this.getNodeParameter('sourceAccount', itemIndex),
+		context.getNodeParameter('sourceAccount', itemIndex),
 		itemIndex,
 	);
 	const destination = readDestination(
 		node,
-		this.getNodeParameter('destination', itemIndex),
+		context.getNodeParameter('destination', itemIndex),
 		itemIndex,
 	);
-	const amount = readAmount(node, this.getNodeParameter('amount', itemIndex), itemIndex);
-	const memo = readMemo(node, this.getNodeParameter('memo', itemIndex, ''), itemIndex);
+	const amount = readAmount(node, context.getNodeParameter('amount', itemIndex), itemIndex);
+	const memo = readMemo(node, context.getNodeParameter('memo', itemIndex, ''), itemIndex);
 	const timeLimit = readTimeLimit(
 		node,
-		this.getNodeParameter('timeLimit', itemIndex, 300),
+		context.getNodeParameter('timeLimit', itemIndex, 300),
 		itemIndex,
 	);
 
