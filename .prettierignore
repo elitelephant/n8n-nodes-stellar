@@ -1,3 +1,7 @@
 package-lock.json
 CODE_OF_CONDUCT.md
 LICENSE.md
+# The copied Confidential Token SDK keeps upstream's formatting (VENDORED.md). Only the files the
+# package adds there are formatted.
+vendor/stellar-confidential-token-sdk/*
+!vendor/stellar-confidential-token-sdk/VENDORED.md
