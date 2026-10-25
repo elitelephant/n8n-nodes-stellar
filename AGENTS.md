@@ -88,10 +88,17 @@ actual node.
 
 ## Stellar
 
-- The package has one node, Stellar Signer (`n8n-nodes-stellar.stellarSigner`, version 1), and one
-  credential, `stellarWalletApi`, with the field `secretKey`. The credential's help is in
-  `CREDENTIALS.md`.
-- Don't break this contract, which existing workflows depend on:
+- The package has four nodes and two credentials. The README describes each one for users, and
+  `ARCHITECTURE.md` says which Stellar API each one uses:
+  - Stellar Signer (`n8n-nodes-stellar.stellarSigner`, version 1), with the credential
+    `stellarWalletApi` (field `secretKey`), whose help is in `CREDENTIALS.md`;
+  - Stellar (`n8n-nodes-stellar.stellar`, version 1), over Horizon, without a credential;
+  - Stellar Trigger (`n8n-nodes-stellar.stellarTrigger`, version 1), a polling trigger over Horizon,
+    without a credential;
+  - Confidential Token (`n8n-nodes-stellar.confidentialToken`, version 1), over Stellar RPC and
+    Testnet only, with the credential `confidentialTokenHolderApi`. It is in progress: so far the
+    resource `holder` has the operation `register`.
+- Don't break the Stellar Signer's contract, which existing workflows depend on:
   - the node type and version above
   - the credential name and its `secretKey` field
   - the credential's optional policy fields, `allowedOperations`, `maxAmounts`, `allowedAssets`,
@@ -147,8 +154,26 @@ actual node.
 - Sign Message signs whatever text reaches it, and a signed text can prove control of the key to
   another service. It stays behind the credential's `allowMessageSigning` switch: don't add a way to
   sign a message without it.
-- The secret key lives only in the Stellar Signer's credential. It never appears in the output, in
-  error messages or in logs.
+- Each secret key lives only in its credential, and only one node reads each credential:
+  `stellarWalletApi` the Stellar Signer, and `confidentialTokenHolderApi` the Confidential Token
+  node. A key never appears in the output, in error messages or in logs. The Stellar node and the
+  Stellar Trigger have no key and sign nothing: keep it that way, and build unsigned transactions
+  there for the Stellar Signer.
+- The Stellar node keeps one file per operation in `nodes/Stellar/actions/<resource>/`, a router,
+  and its Horizon reads in `nodes/Stellar/transport/horizon.ts`. A new operation goes there in the
+  same shape. Every output item carries `networkName`, which the Stellar Signer checks, and the
+  default network is `public`.
+- The Stellar Trigger keeps its memory between polls in the node's static data
+  (`nodes/StellarTrigger/memory.ts`). Each event owns that memory, and changing the event clears it.
+- The Confidential Token node's errors and logs carry no amount, balance or key. Its policy checks
+  are in `nodes/shared/policy.ts` (`checkConfidentialAmount` before the proof,
+  `checkConfidentialFee` after the simulation), its encrypted state and its account lock in
+  `nodes/ConfidentialToken/state/`, and the derivation of its keys, which recalculates the SEP-53
+  signature on every run and never stores it, in `nodes/ConfidentialToken/keys.ts`.
+- `vendor/stellar-confidential-token-sdk/` is a copy of a third-party SDK, compiled with the
+  package. ESLint and Prettier skip its `src/`. Change it only when you must, mark every changed
+  line with a comment that starts with `n8n-nodes-stellar:` (or a `begin`/`end` pair of them around
+  a block), and list the change in its `VENDORED.md`.
 - The value of **Horizon URL** can carry a provider's key. The node keeps it out of the errors that
   n8n stores and sends to an error workflow. Every error that the node creates, or that passes
   through its `catch` blocks, gets a copy of the node with that parameter hidden (`nodeForErrors`),
