@@ -2,7 +2,8 @@ import type { INode } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
 import { Asset, type Horizon, NetworkError, NotFoundError } from '@stellar/stellar-sdk';
 
-import { assetName } from '../../shared/asset';
+import { fromStroops, toStroops } from '../../shared/amount';
+import { assetName, assetOfBalance } from '../../shared/asset';
 import { horizonClientFor } from '../../shared/horizon';
 import type { NetworkName } from '../../shared/network';
 
@@ -275,4 +276,48 @@ function horizonErrorType(body: unknown): string | undefined {
 		return body.type.slice(HORIZON_ERROR_TYPES.length);
 	}
 	return undefined;
+}
+
+// What an account holds of one asset, as Horizon writes the amounts: the asset as the policy writes
+// it, the balance, what the account can spend of it, and the trustline's limit, null for XLM.
+export type Balance = {
+	asset: string;
+	balance: string;
+	spendable: string;
+	limit: string | null;
+};
+
+// The XLM an account has to keep, in stroops, as Stellar's docs give it: two base reserves, one
+// more for each subentry and each entry it sponsors for another account, and one less for each of
+// its entries that another account sponsors.
+export function minimumBalanceOf(account: Horizon.AccountResponse, reserve: bigint): bigint {
+	const entries = 2 + account.subentry_count + account.num_sponsoring - account.num_sponsored;
+	return BigInt(entries) * reserve;
+}
+
+// One balance per asset, XLM first and then the trustlines in Horizon's order. Liquidity pool
+// shares aren't listed. What the account can spend is its balance minus what its sell offers
+// commit, and, for XLM, minus its minimum balance too. It is never below zero.
+export function balancesOf(account: Horizon.AccountResponse, minimumBalance: bigint): Balance[] {
+	const balances: Balance[] = [];
+	for (const line of account.balances) {
+		const asset = assetOfBalance(line);
+		if (asset === undefined || !('selling_liabilities' in line)) {
+			continue;
+		}
+		const free = toStroops(line.balance) - toStroops(line.selling_liabilities);
+		if (asset === 'XLM') {
+			const spendable = spendableText(free - minimumBalance);
+			balances.unshift({ asset, balance: line.balance, spendable, limit: null });
+		} else if ('limit' in line) {
+			const spendable = spendableText(free);
+			balances.push({ asset, balance: line.balance, spendable, limit: line.limit });
+		}
+	}
+	return balances;
+}
+
+// What is left to spend, never below zero, as Horizon writes an amount.
+function spendableText(stroops: bigint): string {
+	return fromStroops(stroops > BigInt(0) ? stroops : BigInt(0));
 }

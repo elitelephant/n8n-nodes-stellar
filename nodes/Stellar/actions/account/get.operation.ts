@@ -1,16 +1,15 @@
-import type {
-	IDataObject,
-	IExecuteFunctions,
-	INode,
-	INodeExecutionData,
-	INodeProperties,
-} from 'n8n-workflow';
+import type { IExecuteFunctions, INode, INodeExecutionData, INodeProperties } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
-import { extractBaseAddress, type Horizon, StrKey } from '@stellar/stellar-sdk';
+import { extractBaseAddress, StrKey } from '@stellar/stellar-sdk';
 
-import { fromStroops, toStroops } from '../../../shared/amount';
-import { assetOfBalance } from '../../../shared/asset';
-import { baseReserve, findAccount, horizonFor } from '../../transport/horizon';
+import { fromStroops } from '../../../shared/amount';
+import {
+	balancesOf,
+	baseReserve,
+	findAccount,
+	horizonFor,
+	minimumBalanceOf,
+} from '../../transport/horizon';
 import { readNetwork } from '../common';
 import { forEachItem } from '../forEachItem';
 
@@ -73,41 +72,6 @@ export async function execute(this: IExecuteFunctions, node: INode): Promise<INo
 			networkName,
 		};
 	});
-}
-
-// The XLM an account has to keep, in stroops, as Stellar's docs give it: two base reserves, one
-// more for each subentry and each entry it sponsors for another account, and one less for each of
-// its entries that another account sponsors.
-function minimumBalanceOf(account: Horizon.AccountResponse, reserve: bigint): bigint {
-	const entries = 2 + account.subentry_count + account.num_sponsoring - account.num_sponsored;
-	return BigInt(entries) * reserve;
-}
-
-// One balance per asset, XLM first and then the trustlines in Horizon's order. Liquidity pool
-// shares aren't listed. What the account can spend is its balance minus what its sell offers
-// commit, and, for XLM, minus its minimum balance too. It is never below zero.
-function balancesOf(account: Horizon.AccountResponse, minimumBalance: bigint): IDataObject[] {
-	const balances: IDataObject[] = [];
-	for (const line of account.balances) {
-		const asset = assetOfBalance(line);
-		if (asset === undefined || !('selling_liabilities' in line)) {
-			continue;
-		}
-		const free = toStroops(line.balance) - toStroops(line.selling_liabilities);
-		if (asset === 'XLM') {
-			const spendable = spendableText(free - minimumBalance);
-			balances.unshift({ asset, balance: line.balance, spendable, limit: null });
-		} else if ('limit' in line) {
-			const spendable = spendableText(free);
-			balances.push({ asset, balance: line.balance, spendable, limit: line.limit });
-		}
-	}
-	return balances;
-}
-
-// What is left to spend, never below zero, as Horizon writes an amount.
-function spendableText(stroops: bigint): string {
-	return fromStroops(stroops > BigInt(0) ? stroops : BigInt(0));
 }
 
 // The account to read, as a G address or as an M address of one of its users.
