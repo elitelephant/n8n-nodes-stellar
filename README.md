@@ -641,16 +641,23 @@ don't show amounts. The node applies these limits from Transfer and Withdraw on.
   its own, and there is no limit per transaction or per run. A **Payment › Batch** of payments that
   are each under the limit is signed whole, and so are ten separate payments of 10 under a limit
   of 10. To cap a run, keep only what it needs in the account.
-- **Execution data.** n8n saves each execution's input and output, which for these nodes includes
-  addresses, amounts and, for the Confidential Token node, the balances it decrypts. In the
-  workflows that use these nodes, especially the Confidential Token node, hide that data:
-  - On n8n Enterprise (Cloud or self-hosted, from n8n 2.16.0), turn on **Redact production execution
-    data** and **Redact manual execution data** in the workflow settings, as n8n's
-    [Redact execution data](https://docs.n8n.io/deploy/host-n8n/configure-n8n/security/redact-execution-data/)
-    page describes.
-  - On other editions, the workflow settings **Save successful production executions** and **Save
-    manual executions** decide whether n8n keeps those executions at all
-    ([Workflow settings](https://docs.n8n.io/workflows/settings/)).
+- **Execution data.** n8n's execution history keeps the input and output of each node. By default,
+  n8n saves the data of every execution, successful, failed or started by hand
+  ([execution variables](https://docs.n8n.io/hosting/configuration/environment-variables/executions/)).
+  For these nodes that data includes addresses and amounts, and, for the Confidential Token node,
+  the amounts and balances it decrypts. These nodes don't ask you to stop saving executions: without
+  the history, you can't see whether a workflow worked. Keep in mind who can read it:
+  - n8n can hide that data, but only on n8n Enterprise (Cloud or self-hosted), from n8n 2.16.0, with
+    the workflow settings **Redact production execution data** and **Redact manual execution data**
+    ([Redact execution data](https://docs.n8n.io/deploy/host-n8n/configure-n8n/security/redact-execution-data/)).
+    The same page warns that redaction is "not a backend access control" and that it "doesn't
+    encrypt or change execution data in the database": anyone with direct access to the database can
+    still read the data.
+  - On other editions, the data stays in the executions as n8n saved it.
+- **Confidential Token privacy.** Stellar's
+  [privacy page](https://developers.stellar.org/docs/build/apps/privacy#confidential-tokens) warns:
+  "The current verifier accepts only non-zero-knowledge UltraHonk proofs, so OpenZeppelin does not
+  guarantee that proofs keep balances and amounts private."
 - **Keys.** Each secret key lives in its own credential and only one node reads it. Use a separate
   account for each workflow, with only the funds it needs, and try workflows on Testnet first.
 
