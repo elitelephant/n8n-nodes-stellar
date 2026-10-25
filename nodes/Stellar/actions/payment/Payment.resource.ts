@@ -2,6 +2,7 @@ import type { INodeProperties } from 'n8n-workflow';
 
 import * as build from './build.operation';
 import * as getTransaction from './getTransaction.operation';
+import { fields as paymentFields } from './payment';
 
 export const operations = { build, getTransaction };
 
@@ -30,4 +31,4 @@ export const operation: INodeProperties = {
 };
 
 // Each operation's own fields, shown after the network.
-export const fields: INodeProperties[] = [...build.description, ...getTransaction.description];
+export const fields: INodeProperties[] = [...paymentFields, ...getTransaction.description];
