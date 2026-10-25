@@ -33,6 +33,8 @@ export interface HolderContext {
 	threads: number;
 	folder: string;
 	secretKey: string;
+	// The credential as n8n hands it over, for the policy fields. Its secret key never goes into an error.
+	credential: Record<string, unknown>;
 	client: ChainClient;
 	account: string;
 	keys: HolderKeys['keys'];
@@ -55,7 +57,7 @@ export async function holderContext(
 	};
 	const threads = readThreads(context, node, itemIndex);
 	const folder = readStateFolder(context, itemIndex);
-	const secretKey = await readSecretKey(context, node, itemIndex);
+	const { secretKey, credential } = await readCredential(context, node, itemIndex);
 
 	const client = chainClientFor(
 		node,
@@ -66,24 +68,36 @@ export async function holderContext(
 	const { account, keys, stateKey } = holderKeys(node, secretKey, contracts.token, itemIndex);
 	const store = new EncryptedFileStore(folder, contracts.token, stateKey);
 	await mkdir(folder, { recursive: true });
-	return { node, itemIndex, contracts, threads, folder, secretKey, client, account, keys, store };
+	return {
+		node,
+		itemIndex,
+		contracts,
+		threads,
+		folder,
+		secretKey,
+		credential,
+		client,
+		account,
+		keys,
+		store,
+	};
 }
 
-// The credential's secret key. Its text never goes into an error.
-async function readSecretKey(
+// The credential and its secret key. The key's text never goes into an error.
+async function readCredential(
 	context: IExecuteFunctions,
 	node: INode,
 	itemIndex: number,
-): Promise<string> {
-	const credentials = await context.getCredentials('confidentialTokenHolderApi');
-	const { secretKey } = credentials;
+): Promise<{ secretKey: string; credential: Record<string, unknown> }> {
+	const credential = await context.getCredentials('confidentialTokenHolderApi');
+	const { secretKey } = credential;
 	if (typeof secretKey !== 'string' || secretKey.trim() === '') {
 		throw new NodeOperationError(node, "The credential's 'Secret Key' is empty", {
 			itemIndex,
 			description: 'Enter the secret key of a Stellar account in the credential.',
 		});
 	}
-	return secretKey.trim();
+	return { secretKey: secretKey.trim(), credential };
 }
 
 // Fails an item whose account isn't registered in the token, before anything is signed or sent.
