@@ -76,6 +76,9 @@ async function unlessMissing<T>(
 	}
 }
 
+// The most records Horizon gives in one page.
+export const HORIZON_PAGE_SIZE = 200;
+
 // What Horizon lists under an account's payments: payments, path payments, account creations and
 // merges, and contract calls.
 export type PaymentsPage = Awaited<ReturnType<ReturnType<Horizon.Server['payments']>['call']>>;

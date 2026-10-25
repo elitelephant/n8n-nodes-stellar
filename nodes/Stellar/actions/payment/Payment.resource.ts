@@ -2,10 +2,11 @@ import type { INodeProperties } from 'n8n-workflow';
 
 import * as batch from './batch.operation';
 import * as build from './build.operation';
+import * as checkPaid from './checkPaid.operation';
 import * as getTransaction from './getTransaction.operation';
 import { fields as paymentFields } from './payment';
 
-export const operations = { batch, build, getTransaction };
+export const operations = { batch, build, checkPaid, getTransaction };
 
 // The payment operations, shown right after the resource.
 export const operation: INodeProperties = {
@@ -29,6 +30,13 @@ export const operation: INodeProperties = {
 			action: 'Build payment',
 		},
 		{
+			name: 'Check Paid',
+			value: 'checkPaid',
+			description:
+				'Check whether a payment with this memo, asset and amount already reached the destination',
+			action: 'Check payment',
+		},
+		{
 			name: 'Get Transaction',
 			value: 'getTransaction',
 			description: 'Get a payment transaction from Horizon by its hash',
@@ -39,4 +47,8 @@ export const operation: INodeProperties = {
 };
 
 // Each operation's own fields, shown after the network.
-export const fields: INodeProperties[] = [...paymentFields, ...getTransaction.description];
+export const fields: INodeProperties[] = [
+	...paymentFields,
+	...checkPaid.description,
+	...getTransaction.description,
+];

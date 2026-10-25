@@ -168,13 +168,18 @@ export async function checkReceiver(
 }
 
 // The amount as the SDK takes it. It is checked before any request to Horizon.
-export function readAmount(node: INode, value: unknown, itemIndex: number): string {
+// fix says what to enter, for the operation that reads it.
+export function readAmount(
+	node: INode,
+	value: unknown,
+	itemIndex: number,
+	fix = 'Enter how much of the asset to send, for example 25 or 25.5.',
+): string {
 	const amount = toAmount(value);
 	if (amount === undefined) {
 		throw new NodeOperationError(node, "'Amount' must be a positive number with up to 7 decimals", {
 			itemIndex,
-			description:
-				'Enter how much of the asset to send, for example 25 or 25.5. Stellar amounts have at most 7 digits after the decimal point.',
+			description: `${fix} Stellar amounts have at most 7 digits after the decimal point.`,
 		});
 	}
 	return amount;

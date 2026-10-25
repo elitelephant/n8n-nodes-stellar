@@ -15,6 +15,7 @@ import { horizonClientFor, nodeForErrors } from '../shared/horizon';
 import { isNetworkName, type NetworkName } from '../shared/network';
 import {
 	findPayments,
+	HORIZON_PAGE_SIZE,
 	joinedTransaction,
 	type PaymentsPage,
 	type PaymentsQuery,
@@ -25,9 +26,9 @@ import {
 const POLLS_OVER_HTTPS =
 	"This node polls a Horizon server over https. Plain http is accepted only for localhost. Enter an https address, or leave the field empty to use SDF's server for the network.";
 
-// Horizon gives at most 200 records per page. A poll reads up to 10 pages, and leaves the rest for
-// the next one.
-const PAGE_SIZE = 200;
+// A poll reads up to 10 pages of the most records Horizon gives, and leaves the rest for the next
+// one.
+const PAGE_SIZE = HORIZON_PAGE_SIZE;
 const MAX_PAGES = 10;
 
 // What the Trigger keeps between polls, in its static data: the cursor of the last record it read,
