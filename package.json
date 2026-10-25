@@ -49,7 +49,8 @@
       "dist/credentials/StellarWalletApi.credentials.js"
     ],
     "nodes": [
-      "dist/nodes/StellarSigner/StellarSigner.node.js"
+      "dist/nodes/StellarSigner/StellarSigner.node.js",
+      "dist/nodes/Stellar/Stellar.node.js"
     ]
   },
   "devDependencies": {

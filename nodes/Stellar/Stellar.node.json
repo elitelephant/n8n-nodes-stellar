@@ -1,0 +1,20 @@
+{
+	"node": "n8n-nodes-stellar.stellar",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Finance & Accounting"],
+	"alias": [
+		"XLM",
+		"Blockchain",
+		"Crypto",
+		"Cryptocurrency",
+		"Web3",
+		"Payment",
+		"Transaction",
+		"Horizon",
+		"Lumens"
+	],
+	"resources": {
+		"primaryDocumentation": [{ "url": "https://github.com/yripper/n8n-nodes-stellar" }]
+	}
+}
