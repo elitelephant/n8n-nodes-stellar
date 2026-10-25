@@ -17,7 +17,7 @@ import {
 } from '@stellar/stellar-sdk';
 
 import { toAmount } from '../../../shared/amount';
-import { assetName, toAsset } from '../../../shared/asset';
+import { assetName, assetOfBalance, toAsset } from '../../../shared/asset';
 import { NETWORK_PASSPHRASES, type NetworkName } from '../../../shared/network';
 import { baseFee, findAccount, horizonFor, timeboundsFor } from '../../transport/horizon';
 import { readNetwork } from '../common';
@@ -360,10 +360,5 @@ function canReceive(receiver: Horizon.AccountResponse, receiverId: string, asset
 	if (asset.isNative() || asset.getIssuer() === receiverId) {
 		return true;
 	}
-	return receiver.balances.some(
-		(line) =>
-			(line.asset_type === 'credit_alphanum4' || line.asset_type === 'credit_alphanum12') &&
-			line.asset_code === asset.getCode() &&
-			line.asset_issuer === asset.getIssuer(),
-	);
+	return receiver.balances.some((line) => assetOfBalance(line) === assetName(asset));
 }

@@ -6,6 +6,7 @@ import type {
 } from 'n8n-workflow';
 import { NodeConnectionTypes } from 'n8n-workflow';
 
+import * as account from './actions/account/Account.resource';
 import { commonProperties } from './actions/common';
 import * as payment from './actions/payment/Payment.resource';
 import { router } from './actions/router';
@@ -37,14 +38,20 @@ export class Stellar implements INodeType {
 				noDataExpression: true,
 				options: [
 					{
+						name: 'Account',
+						value: 'account',
+					},
+					{
 						name: 'Payment',
 						value: 'payment',
 					},
 				],
 				default: 'payment',
 			},
+			account.operation,
 			payment.operation,
 			...commonProperties,
+			...account.fields,
 			...payment.fields,
 		],
 	};
