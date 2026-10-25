@@ -62,7 +62,7 @@ export type SourceAccounts = Map<string, Horizon.AccountResponse>;
 // The source account, read from Horizon the first time the run needs it, or every time without
 // sourceAccounts. An account that doesn't exist on the network fails the item. The address goes in
 // the description: n8n replaces a message that happens to contain one of Node's error codes, and an
-// address can.
+// address can. field is the parameter that holds the account, for the error text.
 export async function sourceAccountFor(
 	node: INode,
 	horizon: Horizon.Server,
@@ -70,6 +70,7 @@ export async function sourceAccountFor(
 	networkName: NetworkName,
 	sourceAccount: string,
 	itemIndex: number,
+	field = 'Source Account',
 ): Promise<Horizon.AccountResponse> {
 	const key = `${networkName} ${sourceAccount}`;
 	const known = sourceAccounts?.get(key);
@@ -80,14 +81,18 @@ export async function sourceAccountFor(
 		node,
 		horizon,
 		sourceAccount,
-		"Couldn't read the source account",
+		`Couldn't read the ${field.toLowerCase()}`,
 		itemIndex,
 	);
 	if (account === undefined) {
-		throw new NodeOperationError(node, `The source account doesn't exist on ${networkName}`, {
-			itemIndex,
-			description: `Horizon has no account ${sourceAccount} on ${networkName}, so nothing was built. Check 'Source Account' and 'Network'. An account exists only after another account creates it with XLM; on testnet, Friendbot can create it.`,
-		});
+		throw new NodeOperationError(
+			node,
+			`The ${field.toLowerCase()} doesn't exist on ${networkName}`,
+			{
+				itemIndex,
+				description: `Horizon has no account ${sourceAccount} on ${networkName}, so nothing was built. Check '${field}' and 'Network'. An account exists only after another account creates it with XLM; on testnet, Friendbot can create it.`,
+			},
+		);
 	}
 	sourceAccounts?.set(key, account);
 	return account;
