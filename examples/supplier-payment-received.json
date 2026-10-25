@@ -1,0 +1,49 @@
+{
+	"name": "Stellar Trigger: supplier receives a payment (Testnet)",
+	"settings": {
+		"executionOrder": "v1"
+	},
+	"pinData": {},
+	"nodes": [
+		{
+			"id": "78ddc3dd-8ead-475d-a20b-676790627190",
+			"name": "Payment to the supplier",
+			"type": "n8n-nodes-stellar.stellarTrigger",
+			"typeVersion": 1,
+			"position": [0, 0],
+			"parameters": {
+				"event": "paymentReceived",
+				"account": "REPLACE_WITH_THE_SUPPLIER_PUBLIC_KEY",
+				"network": "testnet",
+				"pollTimes": {
+					"item": [
+						{
+							"mode": "everyMinute"
+						}
+					]
+				}
+			}
+		},
+		{
+			"id": "a86f7cd7-f515-4961-bd4c-7fa477e23ceb",
+			"name": "Payment received",
+			"type": "n8n-nodes-base.noOp",
+			"typeVersion": 1,
+			"position": [220, 0],
+			"parameters": {}
+		}
+	],
+	"connections": {
+		"Payment to the supplier": {
+			"main": [
+				[
+					{
+						"node": "Payment received",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		}
+	}
+}

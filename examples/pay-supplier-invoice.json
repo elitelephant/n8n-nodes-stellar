@@ -1,0 +1,253 @@
+{
+	"name": "Stellar: pay a supplier invoice (Testnet)",
+	"settings": {
+		"executionOrder": "v1"
+	},
+	"pinData": {},
+	"nodes": [
+		{
+			"id": "32189032-4a00-4801-b4ba-1b9c133ea38b",
+			"name": "When clicking ‘Execute workflow’",
+			"type": "n8n-nodes-base.manualTrigger",
+			"typeVersion": 1,
+			"position": [0, 0],
+			"parameters": {}
+		},
+		{
+			"id": "e840bef4-3445-4d95-8fa3-4cdde68b46e2",
+			"name": "Invoice",
+			"type": "n8n-nodes-base.set",
+			"typeVersion": 3.4,
+			"position": [220, 0],
+			"parameters": {
+				"assignments": {
+					"assignments": [
+						{
+							"id": "87be0d62-df46-4f00-bef6-e35ec216cad2",
+							"name": "invoice",
+							"value": "INV-1001",
+							"type": "string"
+						},
+						{
+							"id": "0014147b-eef5-48d5-99a9-868572f54b11",
+							"name": "amount",
+							"value": "25",
+							"type": "string"
+						},
+						{
+							"id": "e6278cc5-e81d-44cc-8ac4-3c0e6ecd993a",
+							"name": "payer",
+							"value": "REPLACE_WITH_THE_PAYER_PUBLIC_KEY",
+							"type": "string"
+						},
+						{
+							"id": "d85d1040-000b-42cf-82c6-1ee9e8dbf1d4",
+							"name": "supplier",
+							"value": "REPLACE_WITH_THE_SUPPLIER_PUBLIC_KEY",
+							"type": "string"
+						}
+					]
+				},
+				"options": {}
+			}
+		},
+		{
+			"id": "e9ed6e74-5cd9-4128-b9cf-d660baa6a91c",
+			"name": "Payer balance",
+			"type": "n8n-nodes-stellar.stellar",
+			"typeVersion": 1,
+			"position": [440, 0],
+			"parameters": {
+				"resource": "account",
+				"operation": "get",
+				"account": "={{ $json.payer }}",
+				"network": "testnet"
+			}
+		},
+		{
+			"id": "4eab3b09-754b-4009-997a-7b6673df6911",
+			"name": "Already paid?",
+			"type": "n8n-nodes-stellar.stellar",
+			"typeVersion": 1,
+			"position": [660, 0],
+			"parameters": {
+				"resource": "payment",
+				"operation": "checkPaid",
+				"destination": "={{ $('Invoice').item.json.supplier }}",
+				"memo": "={{ $('Invoice').item.json.invoice }}",
+				"asset": "XLM",
+				"amount": "={{ $('Invoice').item.json.amount }}",
+				"sourceAccount": "={{ $('Invoice').item.json.payer }}",
+				"network": "testnet"
+			}
+		},
+		{
+			"id": "bf9a4197-9830-4b9a-9507-6447523cf259",
+			"name": "Not paid yet",
+			"type": "n8n-nodes-base.if",
+			"typeVersion": 2.2,
+			"position": [880, 0],
+			"parameters": {
+				"conditions": {
+					"options": {
+						"caseSensitive": true,
+						"leftValue": "",
+						"typeValidation": "strict",
+						"version": 2
+					},
+					"conditions": [
+						{
+							"id": "ac989e93-d5c5-4819-8dcc-3d4eaa917565",
+							"leftValue": "={{ $json.paid }}",
+							"rightValue": "",
+							"operator": {
+								"type": "boolean",
+								"operation": "false",
+								"singleValue": true
+							}
+						}
+					],
+					"combinator": "and"
+				},
+				"options": {}
+			}
+		},
+		{
+			"id": "a32c1f80-0276-43b9-b44e-abba42d1a5e7",
+			"name": "Build payment",
+			"type": "n8n-nodes-stellar.stellar",
+			"typeVersion": 1,
+			"position": [1100, 0],
+			"parameters": {
+				"resource": "payment",
+				"operation": "build",
+				"sourceAccount": "={{ $('Invoice').item.json.payer }}",
+				"destination": "={{ $('Invoice').item.json.supplier }}",
+				"asset": "XLM",
+				"amount": "={{ $('Invoice').item.json.amount }}",
+				"memo": "={{ $('Invoice').item.json.invoice }}",
+				"timeLimit": 300,
+				"network": "testnet"
+			}
+		},
+		{
+			"id": "87bd7cdc-7add-4ceb-96d6-b0f1cbebabed",
+			"name": "Stellar Signer",
+			"type": "n8n-nodes-stellar.stellarSigner",
+			"typeVersion": 1,
+			"position": [1320, 0],
+			"parameters": {
+				"xdr": "={{ $json.xdr }}",
+				"network": "testnet",
+				"submit": true
+			}
+		},
+		{
+			"id": "5062d9c2-68ef-4be8-88a2-01bbddb7d104",
+			"name": "Confirm on Horizon",
+			"type": "n8n-nodes-stellar.stellar",
+			"typeVersion": 1,
+			"position": [1540, 0],
+			"parameters": {
+				"resource": "payment",
+				"operation": "getTransaction",
+				"txHash": "={{ $json.txHash }}",
+				"network": "testnet"
+			}
+		},
+		{
+			"id": "b29fb28a-0d4f-4c5c-b112-4662ac0574ee",
+			"name": "Already paid, skip",
+			"type": "n8n-nodes-base.noOp",
+			"typeVersion": 1,
+			"position": [1100, 220],
+			"parameters": {}
+		}
+	],
+	"connections": {
+		"When clicking ‘Execute workflow’": {
+			"main": [
+				[
+					{
+						"node": "Invoice",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Invoice": {
+			"main": [
+				[
+					{
+						"node": "Payer balance",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Payer balance": {
+			"main": [
+				[
+					{
+						"node": "Already paid?",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Already paid?": {
+			"main": [
+				[
+					{
+						"node": "Not paid yet",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Not paid yet": {
+			"main": [
+				[
+					{
+						"node": "Build payment",
+						"type": "main",
+						"index": 0
+					}
+				],
+				[
+					{
+						"node": "Already paid, skip",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Build payment": {
+			"main": [
+				[
+					{
+						"node": "Stellar Signer",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Stellar Signer": {
+			"main": [
+				[
+					{
+						"node": "Confirm on Horizon",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		}
+	}
+}
