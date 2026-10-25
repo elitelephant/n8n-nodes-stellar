@@ -502,6 +502,140 @@ export function checkMessageSigning(policy: Policy): PolicyViolation | undefined
 	};
 }
 
+// The Confidential Token node checks the holder's policy on plain amounts, before it makes the
+// zero-knowledge proof, so it has no transaction to decode. It reads the policy with readPolicy:
+// the holder's credential has only Maximum Amounts, Allowed Destinations and Maximum Fee, and a
+// field that isn't there reads as no limit. Its texts carry no amounts, whether the amount sent,
+// the limit or the fee: errors and logs of that node never show them. Like the Signer's, the
+// message carries no text from the request, such as an address or an asset code. The asset and the
+// destination go in the description.
+const IN_HOLDER_CREDENTIAL = 'in the Confidential Token Holder credential';
+const NOT_PROVED = 'This item was not proved, signed or sent.';
+
+export interface ConfidentialRequest {
+	operation: 'transfer' | 'withdraw';
+	// The token's underlying asset: XLM, native or CODE:ISSUER.
+	asset: string;
+	// The amount in stroops, as the node holds it before the proof.
+	stroops: bigint;
+	// Where a transfer goes. A withdraw goes to the holder's own account, so it isn't checked.
+	destination?: string;
+}
+
+// Says what in a transfer or a withdraw the holder's policy doesn't allow, or nothing if it allows
+// it. A transfer is checked on its destination and then on its amount, in the same order as the
+// Signer's checkOperation. A withdraw is checked only on its amount. Whatever can't be read counts
+// as over the limit, never as a pass.
+export function checkConfidentialAmount(
+	policy: Policy,
+	request: ConfidentialRequest,
+): PolicyViolation | undefined {
+	const { operation, destination } = request;
+	const label = operation === 'transfer' ? 'Transfer' : 'Withdraw';
+	const noun = operation === 'transfer' ? 'transfer' : 'withdrawal';
+
+	// An amount that isn't a Stellar amount can't be compared with a limit, so it isn't proved.
+	if (
+		typeof request.stroops !== 'bigint' ||
+		request.stroops < BigInt(0) ||
+		request.stroops > MAX_STROOPS
+	) {
+		return {
+			message: `The amount of this ${noun} is not a valid Stellar amount`,
+			description: `The amount of this ${noun} is negative or too large to be a Stellar amount. ${NOT_PROVED} Check the amount.`,
+		};
+	}
+
+	const { allowedDestinations } = policy;
+	if (operation === 'transfer' && allowedDestinations !== undefined) {
+		const field = LABELS.allowedDestinations;
+		if (typeof destination !== 'string' || destination === '') {
+			return {
+				message: `The transfer has no destination to check against '${field}'`,
+				description: `'${field}' ${IN_HOLDER_CREDENTIAL} has entries, and this transfer has no destination to compare with them. ${NOT_PROVED} Set the destination of the transfer.`,
+			};
+		}
+		if (!isAllowedDestination(allowedDestinations, destination)) {
+			// Only a valid address is repeated: a field could hold a secret key pasted by mistake.
+			const goesTo = isStellarAddress(destination)
+				? `The transfer goes to ${destination}`
+				: 'The destination of the transfer';
+			return {
+				message: `'${field}' doesn't include the destination of the transfer`,
+				description: `${goesTo}, which isn't in '${field}' ${IN_HOLDER_CREDENTIAL}. ${NOT_PROVED} Use another destination, or add it to '${field}'.`,
+			};
+		}
+	}
+
+	const { maxAmounts } = policy;
+	if (maxAmounts !== undefined) {
+		const field = LABELS.maxAmounts;
+		const key = readAsset(typeof request.asset === 'string' ? request.asset.trim() : '');
+		// The text isn't repeated: it could hold anything.
+		if (key === undefined) {
+			return {
+				message: `The asset of this ${noun} could not be read`,
+				description: `'${field}' ${IN_HOLDER_CREDENTIAL} has limits, and the node needs the token's asset to compare with them. ${NOT_PROVED} Check the token, or remove the lines of '${field}' to skip this check.`,
+			};
+		}
+		const limit = maxAmounts.get(key);
+		// An asset without a line isn't proved, as in the Signer: a line with a mistake in the asset
+		// would leave the real asset without a limit.
+		if (limit === undefined) {
+			return {
+				message: `'${field}' has no limit for the asset of this ${noun}`,
+				description: `This ${noun} is of ${key}, which has no line in '${field}' ${IN_HOLDER_CREDENTIAL}. ${NOT_PROVED} Use a token of an asset that has a limit, or add a line for that asset to '${field}'.`,
+			};
+		}
+		if (request.stroops > limit) {
+			return {
+				message: `${label} is over '${field}'`,
+				description: `The amount of this ${noun} of ${key} is over what '${field}' ${IN_HOLDER_CREDENTIAL} allows for one ${noun}. ${NOT_PROVED} Lower the amount, or raise the limit in the credential.`,
+			};
+		}
+	}
+
+	return undefined;
+}
+
+// Says whether the total fee, once the transaction is simulated, is over the holder's Maximum Fee.
+// The fee is only known then, and it includes rent and, if the node made one, the automatic merge's
+// fee. Without a limit there is nothing to check. A fee that can't be a fee counts as over.
+//
+// The official docs, read with Stellar Raven on 25-10-2026:
+// - "Transaction Fee (Tx.fee) = Resource Fee (sorobanData.resourceFee) + Inclusion Fee"
+//   https://developers.stellar.org/docs/learn/fundamentals/fees-resource-limits-metering#resource-fee
+// - the refundable part of the resource fee is "calculated from rent, events, and return value"
+//   https://developers.stellar.org/docs/learn/fundamentals/fees-resource-limits-metering#refundable-and-non-refundable-resource-fees
+export function checkConfidentialFee(
+	policy: Policy,
+	feeStroops: bigint,
+): PolicyViolation | undefined {
+	const { maxFee } = policy;
+	if (maxFee === undefined) {
+		return undefined;
+	}
+	const field = LABELS.maxFee;
+	if (typeof feeStroops !== 'bigint' || feeStroops < BigInt(0)) {
+		return {
+			message: `The total fee could not be read to check it against '${field}'`,
+			description: `'${field}' ${IN_HOLDER_CREDENTIAL} has a limit, and the total fee that came out of the simulation is not a valid fee. The proof made for this item was discarded, and nothing more was signed or sent for it. Try again, or set '${field}' to 0 for no limit.`,
+		};
+	}
+	if (feeStroops > maxFee) {
+		return {
+			message: `The total fee is over '${field}'`,
+			description: `After the simulation, the total fee of this item is over '${field}' ${IN_HOLDER_CREDENTIAL}. The fee of a smart contract (Soroban) transaction is its resource fee plus its inclusion fee, and the refundable part of the resource fee is calculated from rent, events and return value. The proof made for this item was discarded, and nothing more was signed or sent for it. An automatic merge made before may already have gone through. Raise '${field}' in the credential, or set it to 0 for no limit.`,
+		};
+	}
+	return undefined;
+}
+
+// Whether the text is a G account or a muxed (M) address.
+function isStellarAddress(text: string): boolean {
+	return StrKey.isValidEd25519PublicKey(text) || StrKey.isValidMed25519PublicKey(text);
+}
+
 // An asset as the policy writes it: XLM for the native asset and CODE:ISSUER for any other. An
 // issued asset whose code is XLM is not the native one.
 function assetKey(asset: Asset): string {
