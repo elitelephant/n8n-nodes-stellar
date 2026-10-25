@@ -19,8 +19,7 @@ export function horizonFor(
 }
 
 // An account as Horizon has it now, with its sequence number and its data, or undefined if the
-// network doesn't have it. Only Horizon's own not_found says so: the SDK gives the same error for
-// any 404, also one from a server that isn't Horizon.
+// network doesn't have it.
 export async function findAccount(
 	node: INode,
 	horizon: Horizon.Server,
@@ -28,8 +27,44 @@ export async function findAccount(
 	failure: string,
 	itemIndex: number,
 ): Promise<Horizon.AccountResponse | undefined> {
+	return await unlessMissing(
+		node,
+		horizon,
+		async () => await horizon.loadAccount(accountId),
+		failure,
+		itemIndex,
+	);
+}
+
+// A transaction as Horizon has it, by its hash, or undefined if this Horizon server doesn't have it.
+export async function findTransaction(
+	node: INode,
+	horizon: Horizon.Server,
+	txHash: string,
+	failure: string,
+	itemIndex: number,
+): Promise<Horizon.ServerApi.TransactionRecord | undefined> {
+	return await unlessMissing(
+		node,
+		horizon,
+		async () => await horizon.transactions().transaction(txHash).call(),
+		failure,
+		itemIndex,
+	);
+}
+
+// What a request to Horizon gives, or undefined when Horizon doesn't have what it asked for. Only
+// Horizon's own not_found says so: the SDK gives the same error for any 404, also one from a server
+// that isn't Horizon.
+async function unlessMissing<T>(
+	node: INode,
+	horizon: Horizon.Server,
+	request: () => Promise<T>,
+	failure: string,
+	itemIndex: number,
+): Promise<T | undefined> {
 	try {
-		return await horizon.loadAccount(accountId);
+		return await request();
 	} catch (error) {
 		if (error instanceof NotFoundError && horizonErrorType(error.getResponse()) === 'not_found') {
 			return undefined;

@@ -1,8 +1,9 @@
 import type { INodeProperties } from 'n8n-workflow';
 
 import * as build from './build.operation';
+import * as getTransaction from './getTransaction.operation';
 
-export const operations = { build };
+export const operations = { build, getTransaction };
 
 // The payment operations, shown right after the resource.
 export const operation: INodeProperties = {
@@ -18,9 +19,15 @@ export const operation: INodeProperties = {
 			description: 'Build an unsigned payment for the Stellar Signer',
 			action: 'Build payment',
 		},
+		{
+			name: 'Get Transaction',
+			value: 'getTransaction',
+			description: 'Get a payment transaction from Horizon by its hash',
+			action: 'Get transaction',
+		},
 	],
 	default: 'build',
 };
 
 // Each operation's own fields, shown after the network.
-export const fields: INodeProperties[] = [...build.description];
+export const fields: INodeProperties[] = [...build.description, ...getTransaction.description];
