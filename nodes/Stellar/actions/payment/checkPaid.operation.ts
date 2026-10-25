@@ -11,9 +11,9 @@ import {
 	joinedTransaction,
 	receivedTransfer,
 } from '../../transport/horizon';
-import { readNetwork } from '../common';
+import { readAsset, readNetwork } from '../common';
 import { forEachItem } from '../forEachItem';
-import { readAmount, readAsset, readDestination, readMemo, readSourceAccount } from './payment';
+import { readAmount, readDestination, readMemo, readSourceAccount } from './payment';
 
 const showFor = { show: { resource: ['payment'], operation: ['checkPaid'] } };
 

@@ -3,19 +3,15 @@ import { Memo, Operation, TransactionBuilder } from '@stellar/stellar-sdk';
 
 import { NETWORK_PASSPHRASES } from '../../../shared/network';
 import { baseFee, horizonFor, timeboundsFor } from '../../transport/horizon';
-import { readNetwork } from '../common';
-import { forEachItem } from '../forEachItem';
 import {
-	checkReceiver,
-	readAmount,
 	readAsset,
-	readDestination,
-	readMemo,
-	readSourceAccount,
+	readNetwork,
 	readTimeLimit,
 	type SourceAccounts,
 	sourceAccountFor,
-} from './payment';
+} from '../common';
+import { forEachItem } from '../forEachItem';
+import { checkReceiver, readAmount, readDestination, readMemo, readSourceAccount } from './payment';
 
 // Builds one unsigned payment per item for the Stellar Signer, in XLM or in an issued asset. Each
 // source account is read from Horizon once per run, and every payment from it takes the next

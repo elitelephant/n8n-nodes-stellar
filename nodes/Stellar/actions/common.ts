@@ -1,7 +1,10 @@
 import type { IExecuteFunctions, INode, INodeProperties } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
+import type { Asset, Horizon } from '@stellar/stellar-sdk';
 
+import { toAsset } from '../../shared/asset';
 import { isNetworkName, type NetworkName } from '../../shared/network';
+import { findAccount } from '../transport/horizon';
 
 // The parameters that every resource and operation of the node shares. The network values and
 // names are the Stellar Signer's, so an item built here goes into it with its networkName.
@@ -50,4 +53,73 @@ export function readNetwork(
 		itemIndex,
 		description: 'Choose public or testnet in the Network parameter.',
 	});
+}
+
+// The source accounts of the run, as the SDK keeps them, by network and address: building a
+// transaction moves the account's sequence number on.
+export type SourceAccounts = Map<string, Horizon.AccountResponse>;
+
+// The source account, read from Horizon the first time the run needs it, or every time without
+// sourceAccounts. An account that doesn't exist on the network fails the item. The address goes in
+// the description: n8n replaces a message that happens to contain one of Node's error codes, and an
+// address can.
+export async function sourceAccountFor(
+	node: INode,
+	horizon: Horizon.Server,
+	sourceAccounts: SourceAccounts | undefined,
+	networkName: NetworkName,
+	sourceAccount: string,
+	itemIndex: number,
+): Promise<Horizon.AccountResponse> {
+	const key = `${networkName} ${sourceAccount}`;
+	const known = sourceAccounts?.get(key);
+	if (known !== undefined) {
+		return known;
+	}
+	const account = await findAccount(
+		node,
+		horizon,
+		sourceAccount,
+		"Couldn't read the source account",
+		itemIndex,
+	);
+	if (account === undefined) {
+		throw new NodeOperationError(node, `The source account doesn't exist on ${networkName}`, {
+			itemIndex,
+			description: `Horizon has no account ${sourceAccount} on ${networkName}, so nothing was built. Check 'Source Account' and 'Network'. An account exists only after another account creates it with XLM; on testnet, Friendbot can create it.`,
+		});
+	}
+	sourceAccounts?.set(key, account);
+	return account;
+}
+
+// The asset of an item, such as the one a payment sends. It is checked before any request to
+// Horizon. Spaces around it, as a sheet can leave, don't count, as in the Stellar Signer's policy.
+export function readAsset(node: INode, value: unknown, itemIndex: number): Asset {
+	const asset = toAsset(typeof value === 'string' ? value.trim() : value);
+	if (asset === undefined) {
+		throw new NodeOperationError(node, "'Asset' isn't a valid Stellar asset", {
+			itemIndex,
+			description:
+				'Write XLM or native for lumens, or CODE:ISSUER for another asset: its code, a colon, and the address of the account that issues it, for example USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN.',
+		});
+	}
+	return asset;
+}
+
+// A time limit of at least one whole second: without one, the network would take the transaction
+// at any time.
+export function readTimeLimit(node: INode, value: unknown, itemIndex: number): number {
+	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) {
+		throw new NodeOperationError(
+			node,
+			"'Time Limit (Seconds)' must be a whole number of seconds, 1 or more",
+			{
+				itemIndex,
+				description:
+					'Enter how many seconds the network accepts the transaction after it is built, for example 300 for five minutes.',
+			},
+		);
+	}
+	return value;
 }
