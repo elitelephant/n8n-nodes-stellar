@@ -11,6 +11,7 @@ import type {
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import { type Horizon, Keypair, Transaction, xdr } from '@stellar/stellar-sdk';
 
+import { nodeForErrors } from '../shared/horizon';
 import { isNetworkName, NETWORK_PASSPHRASES, type NetworkName } from '../shared/network';
 import { checkMessageSigning, checkPolicy, type Policy, readPolicy } from './policy';
 import {
@@ -397,21 +398,6 @@ export class StellarSigner implements INodeType {
 
 		return [returnData];
 	}
-}
-
-// What goes in the place of the Horizon URL in the node that is attached to an error.
-const HIDDEN_HORIZON_URL = '[hidden by the node]';
-
-// n8n attaches the node, with its saved parameters, to every error, stores that error with the
-// execution and hands it to the error workflow. The address of a provider's Horizon can carry a
-// key, so the copy of the node that goes into this node's errors has a mark in its place. n8n
-// still keeps the address in the workflow and in its own copy of the node.
-function nodeForErrors(node: INode): INode {
-	const { horizonUrl } = node.parameters;
-	if (horizonUrl === undefined || horizonUrl === '') {
-		return node;
-	}
-	return { ...node, parameters: { ...node.parameters, horizonUrl: HIDDEN_HORIZON_URL } };
 }
 
 // What every item needs from the credential.

@@ -141,6 +141,9 @@ actual node.
   transaction hash is hex: `Buffer.from(transaction.hash()).toString('hex')`.
 - The network names, their passphrases and SDF's Horizon server for each one are in
   `nodes/shared/network.ts`. Use it from any node that needs them.
+- The rules for **Horizon URL**, the Horizon client and `nodeForErrors` are in
+  `nodes/shared/horizon.ts`. Use them from any node that calls Horizon, with its own text for the
+  https error, and name the parameter `horizonUrl`.
 - Sign Message signs whatever text reaches it, and a signed text can prove control of the key to
   another service. It stays behind the credential's `allowMessageSigning` switch: don't add a way to
   sign a message without it.

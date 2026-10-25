@@ -11,10 +11,8 @@ import {
 } from '@stellar/stellar-sdk';
 
 import { resourceFeeOf } from '../shared/fees';
-import { horizonUrlFor, type NetworkName } from '../shared/network';
-
-// The SDK's own limit for the submission request, used for every request to Horizon.
-const REQUEST_TIMEOUT_MS = 60000;
+import { horizonClientFor, REQUEST_TIMEOUT_MS } from '../shared/horizon';
+import type { NetworkName } from '../shared/network';
 
 // Horizon names each of its errors with a type under this address.
 const HORIZON_ERROR_TYPES = 'https://stellar.org/horizon-errors/';
@@ -47,58 +45,22 @@ const COULD_NOT_LOOK_UP = "The node couldn't look it up on Horizon.";
 // successful answer, and it takes any 2xx as a success.
 const LAST_STATUS = new WeakMap<Horizon.Server, number>();
 
-const ENTER_HORIZON_URL =
-	"Enter the address of a Horizon server, for example https://horizon-testnet.stellar.org, or leave the field empty to use SDF's server for the network.";
-
-// The hosts that are this same machine, as Stellar Lab lists them.
-const LOCAL_HOSTNAMES = ['localhost', '127.0.0.1', '[::1]'];
-
-// The Horizon client for the item's submission. A Horizon URL that can't be used fails the item
-// here. A value without text, such as an expression that gives nothing, counts as empty. The
-// address must be https. Plain http is accepted only for a server on this same machine, where
-// nobody can sit between the node and Horizon. The address can't carry a user name or a password.
-// No error here repeats the address, which can have a key in it.
+// The Horizon client for the item's submission, with the shared rules for Horizon URL. It follows
+// no redirect, which would send the signed transaction to another server. It also keeps the status
+// of each answer, which the SDK doesn't hand back.
 export function horizonServerFor(
 	node: INode,
 	networkName: NetworkName,
 	horizonUrl: unknown,
 	itemIndex: number,
 ): Horizon.Server {
-	const url = horizonUrlFor(networkName, String(horizonUrl ?? ''));
-	let parsed: URL;
-	try {
-		parsed = new URL(url);
-	} catch {
-		// The parser's own error repeats the address, so it isn't kept as the cause.
-		throw new NodeOperationError(node, "'Horizon URL' isn't a valid URL", {
-			itemIndex,
-			description: ENTER_HORIZON_URL,
-		});
-	}
-	const isLocalHttp = parsed.protocol === 'http:' && LOCAL_HOSTNAMES.includes(parsed.hostname);
-	if (parsed.protocol !== 'https:' && !isLocalHttp) {
-		throw new NodeOperationError(node, "'Horizon URL' must start with https://", {
-			itemIndex,
-			description:
-				"This node submits to a Horizon server over https. Plain http is accepted only for localhost. Enter an https address, or leave the field empty to use SDF's server for the network.",
-		});
-	}
-	// The SDK's client doesn't send a request to an address with a user name or a password, and
-	// its error repeats the whole address.
-	const hasCredentials = parsed.username !== '' || parsed.password !== '';
-	if (hasCredentials) {
-		throw new NodeOperationError(node, "'Horizon URL' can't have a user name or a password", {
-			itemIndex,
-			description:
-				"The node can't send requests to an address with a user name or a password in it. Remove them from the address, or leave the field empty to use SDF's server for the network.",
-		});
-	}
-	// The SDK accepts any scheme once allowHttp is on, so the scheme is checked above.
-	const horizon = new Horizon.Server(url, { allowHttp: isLocalHttp });
-	// The SDK sets no time limit on its other requests, such as the memo check's.
-	horizon.httpClient.defaults.timeout = REQUEST_TIMEOUT_MS;
-	// A redirect would send the signed transaction to another server.
-	horizon.httpClient.defaults.maxRedirects = 0;
+	const horizon = horizonClientFor(
+		node,
+		networkName,
+		horizonUrl,
+		itemIndex,
+		"This node submits to a Horizon server over https. Plain http is accepted only for localhost. Enter an https address, or leave the field empty to use SDF's server for the network.",
+	);
 	horizon.httpClient.interceptors.response.use((response) => {
 		LAST_STATUS.set(horizon, response.status);
 		return response;
