@@ -7,7 +7,7 @@ import {
 	type Transaction,
 } from '@stellar/stellar-sdk';
 
-import { resourceFeeOf } from '../shared/fees';
+import { resourceFeeOf } from './fees';
 
 // The signing policy: the limits that the Stellar Wallet API credential puts on what the node
 // signs. This module doesn't depend on n8n. It reads the credential's fields and checks a decoded

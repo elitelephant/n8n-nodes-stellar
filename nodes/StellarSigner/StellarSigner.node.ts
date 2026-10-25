@@ -13,7 +13,7 @@ import { type Horizon, Keypair, Transaction, xdr } from '@stellar/stellar-sdk';
 
 import { nodeForErrors } from '../shared/horizon';
 import { isNetworkName, NETWORK_PASSPHRASES, type NetworkName } from '../shared/network';
-import { checkMessageSigning, checkPolicy, type Policy, readPolicy } from './policy';
+import { checkMessageSigning, checkPolicy, type Policy, readPolicy } from '../shared/policy';
 import {
 	addAppliedTransactions,
 	type AppliedTransaction,

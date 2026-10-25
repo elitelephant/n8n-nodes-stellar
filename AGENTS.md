@@ -156,7 +156,7 @@ actual node.
   error, never `this.getNode()`. Two things stay outside the node: n8n keeps the address in the
   workflow and in the saved execution, and with **On Error** on **Stop Workflow** the error that n8n
   throws for a missing credential goes out as it came.
-- The signing policy is in `nodes/StellarSigner/policy.ts`, which doesn't import n8n. It reads the
+- The signing policy is in `nodes/shared/policy.ts`, which doesn't import n8n. It reads the
   credential's policy fields and checks the decoded transaction before the node signs it. A new
   control goes there. A credential that the node can't use signs nothing: n8n can't hand it over,
   the secret key is empty, or a policy field can't be read. The node then throws before the items.
