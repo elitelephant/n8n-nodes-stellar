@@ -38,7 +38,7 @@ export async function findAccount(
 	);
 }
 
-// A transaction as Horizon has it, by its hash, or undefined if this Horizon server doesn't have it.
+// A transaction as Horizon has it, by its hash, or undefined if this server doesn't have it.
 export async function findTransaction(
 	node: INode,
 	horizon: Horizon.Server,
@@ -79,17 +79,17 @@ async function unlessMissing<T>(
 // merges, and contract calls.
 export type PaymentsPage = Awaited<ReturnType<ReturnType<Horizon.Server['payments']>['call']>>;
 
-// Which page of an account's payments to read. Without a cursor, the page starts at the first or the
-// last record, by its order.
+// Which page of an account's payments to read. Without a cursor, the page starts at the first or
+// the last record, by its order.
 export interface PaymentsQuery {
 	order: 'asc' | 'desc';
 	limit: number;
 	cursor?: string;
 }
 
-// One page of the operations that moved funds to or from an account, as Horizon lists them under its
-// payments, with each transaction joined so its memo is there. Undefined if the network doesn't have
-// the account.
+// One page of the operations that moved funds to or from an account, as Horizon lists them under
+// its payments, with each transaction joined so its memo is there. Undefined if the network doesn't
+// have the account.
 export async function findPayments(
 	node: INode,
 	horizon: Horizon.Server,
@@ -122,6 +122,29 @@ export async function baseFee(
 	} catch (error) {
 		throw requestFailed(node, horizon, error, "Couldn't read the network's base fee", itemIndex);
 	}
+}
+
+// The base reserve of the last ledger, in stroops: what each entry of an account adds to its
+// minimum balance.
+export async function baseReserve(
+	node: INode,
+	horizon: Horizon.Server,
+	itemIndex: number | undefined,
+): Promise<number> {
+	const failure = "Couldn't read the network's base reserve";
+	let latest: Horizon.ServerApi.LedgerRecord | undefined;
+	try {
+		[latest] = (await horizon.ledgers().order('desc').limit(1).call()).records;
+	} catch (error) {
+		throw requestFailed(node, horizon, error, failure, itemIndex);
+	}
+	if (latest === undefined || !Number.isSafeInteger(latest.base_reserve_in_stroops)) {
+		throw new NodeOperationError(node, failure, {
+			itemIndex,
+			description: `The answer from ${horizon.serverURL.host} doesn't look like Horizon's: check 'Horizon URL'.`,
+		});
+	}
+	return latest.base_reserve_in_stroops;
 }
 
 // The time bounds for a transaction that the network accepts for timeLimit seconds, counted on

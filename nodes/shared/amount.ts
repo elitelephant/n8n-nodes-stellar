@@ -1,6 +1,7 @@
 // Stellar amounts: a 64-bit integer of stroops, shown divided by ten million, so an amount has at
 // most 7 digits after the decimal point and is at most (2^63 - 1) / 10^7.
 const DECIMALS = 7;
+const STROOPS_PER_UNIT = BigInt(10 ** DECIMALS);
 const MAX_STROOPS = BigInt('9223372036854775807');
 const DECIMAL_TEXT = /^(\d+)(?:\.(\d{1,7}))?$/;
 
@@ -22,7 +23,19 @@ export function toAmount(value: unknown): string | undefined {
 	if (parts === null) {
 		return undefined;
 	}
-	const stroops =
-		BigInt(parts[1]) * BigInt(10 ** DECIMALS) + BigInt((parts[2] ?? '').padEnd(DECIMALS, '0'));
+	const stroops = toStroops(text);
 	return stroops > BigInt(0) && stroops <= MAX_STROOPS ? text : undefined;
+}
+
+// An amount with up to 7 decimals, such as 100 or 100.0000000 as Horizon writes it, in stroops. It
+// doesn't check the text: toAmount does.
+export function toStroops(amount: string): bigint {
+	const [units, decimals = ''] = amount.split('.');
+	return BigInt(units) * STROOPS_PER_UNIT + BigInt(decimals.padEnd(DECIMALS, '0'));
+}
+
+// Stroops as an amount with 7 decimals, the way Horizon writes it.
+export function fromStroops(stroops: bigint): string {
+	const decimals = (stroops % STROOPS_PER_UNIT).toString().padStart(DECIMALS, '0');
+	return `${stroops / STROOPS_PER_UNIT}.${decimals}`;
 }

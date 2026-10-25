@@ -315,9 +315,9 @@ function readTimeLimit(node: INode, value: unknown, itemIndex: number): number {
 	return value;
 }
 
-// Whether a payment to this destination needs a memo, as SEP-29 says: its account has the data entry
-// config.memo_required set to 1, which Horizon gives in base64. An M address already names the user
-// of the account, so it needs none, and the SDK's own check skips it too.
+// Whether a payment to this destination needs a memo, as SEP-29 says: its account has the data
+// entry config.memo_required set to 1, which Horizon gives in base64. An M address already names
+// the user of the account, so it needs none, and the SDK's own check skips it too.
 function requiresMemo(receiver: Horizon.AccountResponse, destination: string): boolean {
 	return (
 		!StrKey.isValidMed25519PublicKey(destination) &&
