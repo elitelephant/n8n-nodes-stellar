@@ -1,30 +1,135 @@
 # n8n-nodes-stellar
 
-This is an n8n community node. It lets you sign Stellar transactions in your n8n workflows, with a
-secret key stored in an n8n credential, and optionally submit them to the network. It can also sign
-a message with that key.
-
-[Stellar](https://stellar.org/) is a public blockchain network for payments and asset issuance. Its
-native currency is the lumen (XLM).
+This is an n8n community node package for [Stellar](https://stellar.org/), a public blockchain
+network for payments and asset issuance, whose native currency is the lumen (XLM). Its nodes let an
+n8n workflow read Stellar accounts and payments, build payments, sign them with a key kept in an n8n
+credential, submit them, and start when an account receives a payment.
 
 [n8n](https://n8n.io/) is a [fair-code licensed](https://docs.n8n.io/n8n-community-license) workflow
 automation platform.
 
+[What it does](#what-it-does)  
 [Installation](#installation)  
-[Operations](#operations)  
+[Environment variables](#environment-variables)  
+[Try it without installing](#try-it-without-installing)  
+[Run the demo](#run-the-demo)  
+[Nodes](#nodes)  
 [Credentials](#credentials)  
+[Security notes](#security-notes)  
+[Testing status](#testing-status)  
+[Architecture and prior work](#architecture-and-prior-work)  
 [Compatibility](#compatibility)  
-[Usage](#usage)  
 [Resources](#resources)
+
+## What it does
+
+An n8n workflow can read an invoice or a payroll sheet, but paying it on Stellar takes several
+steps: build the transaction, check it before it is signed, sign it with the account's secret key,
+submit it, confirm the result, and avoid paying the same invoice twice. This package gives each of
+those steps as an n8n node, so the whole payment runs inside the workflow, and the secret key stays
+in an n8n credential that only the Stellar Signer reads.
+
+| Node                   | What it does                                                                                                                                                                                 | Status          |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| **Stellar Signer**     | Signs a transaction with the credential's secret key, checks it first against limits set in the credential, and can submit it to the network. It can also sign a message (SEP-53).           | Built           |
+| **Stellar**            | Reads an account's balances, builds unsigned payments (one per item, or many in one transaction), checks whether an invoice was already paid, looks a transaction up, and builds trustlines. | Built           |
+| **Stellar Trigger**    | Starts the workflow when an account receives a payment, or when its balance goes below a threshold.                                                                                          | Built           |
+| **Confidential Token** | Registers an account in a confidential token on Testnet: a token designed to keep balances and amounts private while addresses stay public.                                                  | **In progress** |
+
+<!-- CT-STATUS: update this row and the Confidential Token sections when ticket #95 closes. -->
+
+The Stellar node has no key and signs nothing. The Stellar Signer is the only node that reads the
+Stellar Wallet API credential, so a workflow builds with the Stellar node, signs with the Signer,
+and confirms with the Stellar node again.
 
 ## Installation
 
+### From this repository (all four nodes)
+
+The version published on npm, 0.2.0, has only the Stellar Signer. To install the four nodes, build
+the package from this repository and install it into your self-hosted n8n:
+
+```bash
+git clone https://github.com/elitelephant/n8n-nodes-stellar.git
+cd n8n-nodes-stellar
+npm ci
+npm run build
+npm pack                       # writes n8n-nodes-stellar-<version>.tgz
+
+mkdir -p ~/.n8n/nodes
+cd ~/.n8n/nodes
+npm install /path/to/n8n-nodes-stellar-<version>.tgz
+```
+
+npm also installs the dependencies of the Confidential Token SDK, such as `@aztec/bb.js`, so it
+takes longer than for the Signer alone. Then restart n8n. This follows n8n's
+[manual installation](https://docs.n8n.io/integrations/community-nodes/installation/manual-install/)
+of community nodes, with the package file in place of a name on npm. In Docker, copy the package
+file into the container and run the last three commands in its shell, as that page shows. Don't use
+**Update** on n8n's community nodes screen for this package: it would install 0.2.0 from npm, which
+has only the Signer.
+
+### From npm (Stellar Signer only)
+
 Follow the [installation guide](https://docs.n8n.io/integrations/community-nodes/installation/) in
-the n8n community nodes documentation.
+the n8n community nodes documentation, with the package name `n8n-nodes-stellar`.
 
-## Operations
+## Environment variables
 
-The package has one node, **Stellar Signer**, with two operations:
+The package reads no environment variables of its own. What each node needs is a parameter or a
+credential field:
+
+- The Stellar Signer, the Stellar node and the Stellar Trigger take an optional **Horizon URL**.
+  Empty, they use SDF's Horizon server for the chosen network.
+- The Confidential Token node takes an optional **RPC URL** and a **State Folder**, where it keeps
+  each account's encrypted state and the setup file its proofs need. Empty, the folder is
+  `~/.n8n/stellar-confidential`. See [Confidential Token](#confidential-token-in-progress).
+
+## Try it without installing
+
+<!-- JUDGES-URL: the address of the public n8n instance for the HackMeridian judges goes here. -->
+
+A public n8n instance with these nodes installed, for trying them without installing anything, is
+being set up. Its address will be here.
+
+## Run the demo
+
+The [`examples/`](examples/) folder has the two workflows of the demo, on Testnet. They hold no
+credentials, keys or account addresses.
+
+1. Install the package as described above, and start n8n.
+2. Create two Testnet accounts, a payer and a supplier, for example with the
+   [Create Account Keypair](https://lab.stellar.org/account/create) page of Stellar Lab and its
+   **Fund account with Friendbot** button, which gives each account 10,000 test XLM. See
+   [CREDENTIALS.md](CREDENTIALS.md#get-a-secret-key-on-testnet).
+3. In n8n, create a **Stellar Wallet API** credential with the payer's secret key.
+4. Import [`examples/pay-supplier-invoice.json`](examples/pay-supplier-invoice.json) (**Import from
+   File** in the workflow menu). In its **Invoice** node, replace
+   `REPLACE_WITH_THE_PAYER_PUBLIC_KEY` and `REPLACE_WITH_THE_SUPPLIER_PUBLIC_KEY` with the two
+   public keys. In the **Stellar Signer** node, choose the credential.
+5. Run the workflow. It reads the payer's balances (**Account › Get**), checks whether invoice
+   `INV-1001` was already paid to the supplier (**Payment › Check Paid**), builds a 25 XLM payment
+   with the invoice number as its memo (**Payment › Build**), signs and submits it (**Stellar
+   Signer**, with **Submit to Horizon** on), and looks it up on Horizon (**Payment › Get
+   Transaction**). The Signer's output has `submitted: true` and the `ledger`.
+6. Run it again. **Check Paid** now finds the payment, `paid` is `true`, and the workflow skips the
+   invoice instead of paying it twice.
+
+[`examples/supplier-payment-received.json`](examples/supplier-payment-received.json) is the
+supplier's side: a **Stellar Trigger** that watches the supplier's account for payments received,
+polling every minute. Replace `REPLACE_WITH_THE_SUPPLIER_PUBLIC_KEY` and publish the workflow, so
+that, as n8n's [Save and publish workflows](https://docs.n8n.io/workflows/publish/) page puts it,
+"events from connected apps will trigger this workflow". **Fetch Test Event** returns the last
+payment the account received.
+
+The demo's own run, from n8n's engine on Testnet, is listed in
+[ARCHITECTURE.md](ARCHITECTURE.md#evidence-on-testnet).
+
+## Nodes
+
+### Stellar Signer
+
+The **Stellar Signer** has two operations:
 
 - **Sign Transaction** (`signTransaction`), the default: signs a Stellar transaction and returns it
   signed. It can also submit the signed transaction to the network, which is off by default.
@@ -34,7 +139,7 @@ The package has one node, **Stellar Signer**, with two operations:
 A workflow saved before the **Operation** parameter existed signs transactions, once its input items
 carry `networkName`, as explained below.
 
-### Sign a transaction
+#### Sign a transaction
 
 Parameters:
 
@@ -69,7 +174,7 @@ item fails and isn't signed.
 The network isn't stored in the transaction XDR, so this field is how the node knows which network
 the transaction was built for. If the XDR comes from a node that doesn't set it, add the field with
 an **Edit Fields** node before the Stellar Signer, with **Include Other Input Fields** turned on so
-the item keeps the XDR.
+the item keeps the XDR. The Stellar node sets it on every item it outputs.
 
 Each output item keeps the fields of its input item and adds:
 
@@ -100,7 +205,7 @@ or sent. A destination account that doesn't exist yet requires nothing.
 The node waits up to 60 seconds for each answer from Horizon and doesn't follow redirects. Error
 messages count a transaction's operations from 1 and a run's items from 0, as n8n does.
 
-### When Horizon doesn't confirm a transaction
+#### When Horizon doesn't confirm a transaction
 
 The node submits once. When Horizon gives no verdict, the node looks the transaction up by its hash
 on the same Horizon server: at once, and then every 5 seconds for up to 30 seconds. If the
@@ -215,7 +320,7 @@ With **On Error** on **Stop Workflow**, the run fails. With one of the **Continu
 item comes out failed instead of going on unsigned. Each has `error` as a text with that same
 message, without the fields of its input item, and the execution finishes as successful.
 
-### Several payments in one run
+#### Several payments in one run
 
 Each item is one transaction, and the node submits them one at a time, in order.
 
@@ -228,7 +333,7 @@ Each item is one transaction, and the node submits them one at a time, in order.
 - An item with the same transaction as an earlier item of the run fails and isn't sent: a
   transaction is applied only once, so it pays once. Build a separate transaction for each payment.
 
-### Sign a message
+#### Sign a message
 
 With **Operation** on **Sign Message**, the node signs the text of the **Message** parameter
 (`message`) with the wallet's key, following
@@ -256,11 +361,234 @@ such a proof, for example as a login. The node signs whatever text it receives, 
 screen that shows the text before it is signed. Don't sign a text that comes from outside the
 workflow, such as a webhook or a form, without checking what it says first.
 
+#### Usage
+
+The Stellar Signer sits between a node that builds a transaction and a node that uses the signed
+result:
+
+1. A previous node produces the unsigned transaction XDR, in an item that has a `networkName` field
+   with the network the transaction was built for. The Stellar node's **Payment › Build**, **Payment
+   › Batch** and **Asset › Build Trustline** do both.
+2. In the Stellar Signer, set **Transaction XDR** with an expression that reads that XDR from the
+   previous node's output, and choose the same network in **Network**.
+3. The next node reads the signed transaction with `{{ $json.signedXdr }}`. To send it to the
+   network from this node instead, turn on **Submit to Horizon** and read `{{ $json.ledger }}`.
+
+To co-sign a transaction that needs several signatures, because its account needs them or because an
+operation has another source account, pass `signedXdr` through another Stellar Signer with the
+credential of the next signer. Each key signs once: if the XDR already has a valid signature of the
+credential's key, the item fails before it is signed, because the network rejects a repeated
+signature with `tx_bad_auth_extra`. The network also rejects a signature that the account doesn't
+need: once the signatures reach the account's threshold, one more, even a valid one, gets
+`tx_bad_auth_extra`.
+
+### Stellar
+
+The **Stellar** node reads from Horizon and builds unsigned transactions for the Stellar Signer. It
+has no credential and signs nothing.
+
+Every operation has these parameters:
+
+- **Network** (`network`): Public (`public`), the default, or Testnet (`testnet`). Every output item
+  has it in its `networkName` field, which the Stellar Signer checks.
+- **Horizon URL** (`horizonUrl`): optional, with the same rules as in the Stellar Signer. Empty, the
+  node uses `https://horizon-testnet.stellar.org` for `testnet` and `https://horizon.stellar.org`
+  for `public`.
+
+Assets are written as in the Signer's credential: `XLM` or `native` for lumens, and `CODE:ISSUER`
+for an issued asset. Amounts have up to 7 decimals. With n8n's **On Error** on a **Continue**
+option, an item that fails comes out with its error and the next item runs.
+
+#### Account › Get
+
+Reads an account: its balance of each asset and what it can spend of it.
+
+- **Account** (`account`): a `G` address, or an `M` (muxed) address, which stands for its `G`
+  account.
+
+Output:
+
+| Field            | Description                                                                                                                                                                                                                                                                       |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `account`        | The `G` address.                                                                                                                                                                                                                                                                  |
+| `balances`       | One entry per asset, XLM first: `asset`, `balance`, `spendable` and the trustline's `limit` (`null` for XLM). `spendable` is the balance minus what the account's sell offers commit and, for XLM, minus the minimum balance, never below 0. Liquidity pool shares aren't listed. |
+| `minimumBalance` | The XLM the account has to keep.                                                                                                                                                                                                                                                  |
+| `baseReserve`    | The network's base reserve in the last ledger.                                                                                                                                                                                                                                    |
+| `subentryCount`  | The account's subentries, such as trustlines and offers.                                                                                                                                                                                                                          |
+| `sequence`       | The account's sequence number.                                                                                                                                                                                                                                                    |
+
+The minimum balance is two base reserves, plus one for each subentry, adjusted for the entries the
+account sponsors or that another account sponsors for it, as Stellar's documentation on
+[minimum balance](https://developers.stellar.org/docs/learn/fundamentals/lumens#minimum-balance)
+explains.
+
+#### Payment › Build
+
+Builds one unsigned payment per input item.
+
+- **Source Account** (`sourceAccount`): the `G` address that pays. Its key signs the transaction in
+  the Stellar Signer.
+- **Destination** (`destination`): a `G` address, or the `M` address of one of its users.
+- **Asset** (`asset`): `XLM` by default.
+- **Amount** (`amount`).
+- **Memo** (`memo`): optional text of up to 28 bytes, such as the invoice number the receiver uses
+  to match the payment.
+- **Time Limit (Seconds)** (`timeLimit`): how long the network accepts the transaction after it is
+  built, counted on Horizon's clock. 300 by default.
+
+Before it builds the payment, the node checks on Horizon that the destination account exists, that
+it can receive the asset (it has a trustline for it, or it is its issuer), and that it has a memo if
+the destination asks for one with SEP-29. A payment that fails a check isn't built. The fee is the
+network's base fee, read from Horizon. Payments from the same source account in one run take
+consecutive sequence numbers, in the order of the items, so the Stellar Signer can submit them all
+in that order.
+
+Output: `xdr`, `txHash`, `sourceAccount`, `sequence`, `fee`, `memo`, `networkName`,
+`destinationExists`, `memoRequired` and `hasTrustline`.
+
+#### Payment › Batch
+
+Builds one unsigned transaction with a payment for each input item, such as a payroll run. The
+**Source Account**, **Memo** and **Time Limit** come from the first item, and each item gives its
+own **Destination**, **Asset** and **Amount**. A Stellar transaction holds up to 100 operations, so
+a batch holds up to 100 payments. The transaction applies all its payments or none, so if one item
+can't go in, nothing is built, and the error names every item that can't. Each destination gets the
+same checks as in **Build**.
+
+Output: a single item, linked to every input item, with `xdr`, `txHash`, `sourceAccount`,
+`sequence`, `fee` (the base fee times the payments), `memo`, `paymentCount` and `networkName`.
+
+#### Payment › Check Paid
+
+Checks whether a payment already reached the destination, so that a workflow doesn't pay the same
+invoice twice.
+
+- **Destination** (`destination`): the account that would have received it. With an `M` address,
+  only a payment to that same `M` address counts.
+- **Memo** (`memo`): required, such as the invoice number.
+- **Asset** (`asset`) and **Amount** (`amount`): only the exact amount counts.
+- **Source Account** (`sourceAccount`): optional. Only payments from this account count.
+- **Max Records** (`maxRecords`): how many of the destination's latest payment records to look
+  through, from the newest. 200 by default.
+
+Output: `paid`, and, when it is `true`, the payment's `txHash`, `ledger` and `createdAt`.
+`searchedUntil` is the date of the oldest record it looked at: `paid: false` means the payment isn't
+among those records, not that it was never made. A batch carries the memo of its run, not of each
+invoice.
+
+#### Payment › Get Transaction
+
+Looks a transaction up on Horizon by its hash (`txHash`, 64 hexadecimal characters), such as the
+`txHash` of the Stellar Signer's output.
+
+Output: `txHash`, `successful`, `ledger`, `createdAt`, `memo`, `feeCharged` and `sourceAccount`. If
+Horizon doesn't have the transaction, the item fails. That doesn't prove that it wasn't applied: a
+Horizon server keeps only part of the history.
+
+#### Asset › Build Trustline
+
+Builds one unsigned change trust (`changeTrust`) per item, so an account can hold an issued asset
+such as USDC.
+
+- **Account** (`account`): the `G` address that will hold the asset.
+- **Asset** (`asset`): `CODE:ISSUER`. XLM needs no trustline.
+- **Trust Limit** (`trustLimit`): optional. Empty, the most Stellar allows.
+- **Time Limit (Seconds)** (`timeLimit`): 300 by default.
+
+Each new trustline is a subentry, so it raises the account's minimum balance by one base reserve. If
+the Stellar Signer's credential limits amounts, assets or destinations, the Signer signs only
+payments: list `changeTrust` in its **Allowed Operations**, together with the payment types it
+should sign.
+
+Output: `xdr`, `txHash`, `sourceAccount`, `sequence`, `fee`, `asset`, `limit` and `networkName`.
+
+### Stellar Trigger
+
+The **Stellar Trigger** polls Horizon and starts the workflow on one of two events (**Trigger On**,
+`event`):
+
+- **Payment Received** (`paymentReceived`), the default: a payment or a path payment to the account,
+  or the create account operation that creates it.
+- **Balance Below Threshold** (`balanceBelowThreshold`): the account's balance of an asset goes
+  below a threshold.
+
+Parameters:
+
+- **Account** (`account`): the `G` address to watch.
+- **Network** (`network`): Public (`public`), the default, or Testnet (`testnet`).
+- **Horizon URL** (`horizonUrl`): optional, with the same rules as in the other nodes.
+- For **Payment Received**, **Filters**: **Asset** (only payments in this asset) and **Minimum
+  Amount** (only payments of at least this amount, to ignore spam).
+- For **Balance Below Threshold**: **Asset** (`XLM` by default), **Threshold**, and **Compare
+  With**: **Spendable Balance** (the default, what the account can send) or **Balance** (the whole
+  balance).
+
+**Payment Received** starts from the moment the workflow is published, without the account's
+history. Each poll reads up to 10 pages of 200 records and leaves the rest for the next poll. Each
+payment is one output item, with `from`, `to`, `asset`, `amount`, `memo`, `txHash`, `ledger`,
+`createdAt` and `networkName`. **Fetch Test Event** returns the last payment the account received
+that passes the filters, among its latest 200 payment records.
+
+**Balance Below Threshold** fires once when the balance goes below the threshold, and again only
+after the balance gets back to the threshold. The first poll fires if the balance is already below.
+The output item has `account`, `asset`, `balance`, `spendable`, `threshold`, `compareWith` and
+`networkName`. **Fetch Test Event** returns the balance when it is below the threshold, and fails
+with the balance and the threshold when it isn't. An account without a trustline for the asset fails
+the poll.
+
+### Confidential Token (in progress)
+
+<!-- CT-STATUS: this section describes the node as of commit 53a0d1a (Register). Update it when
+tickets #94 and #95 close. -->
+
+[Confidential tokens](https://developers.stellar.org/docs/build/apps/privacy#confidential-tokens)
+"let users keep token balances and transaction amounts private while keeping the sender and
+receiver's addresses publicly visible onchain". OpenZeppelin implements them for Stellar in its
+`stellar-contracts` library, as of v0.8.0. The same page warns: "The current verifier accepts only
+non-zero-knowledge UltraHonk proofs, so OpenZeppelin does not guarantee that proofs keep balances
+and amounts private." The node works only on Testnet.
+
+The **Confidential Token** node has one resource, **Holder**. Its operation **Register** registers
+the holder's account in a confidential token. **Deposit**, **Merge** and **Get Balance**, and then
+**Transfer** and **Withdraw**, are being built.
+
+Parameters:
+
+- **Network** (`network`): only Testnet.
+- **RPC URL** (`rpcUrl`): optional, with the rules of **Horizon URL**. Empty, the node uses SDF's
+  Testnet RPC, `https://soroban-testnet.stellar.org`.
+- **Token Contract**, **Verifier Contract** and **Auditor Contract**: the contracts' `C` addresses,
+  required and without a default, so that the node never works on a deployment the user didn't
+  choose.
+- **State Folder** (`stateFolder`): where the node keeps each account's encrypted state and the
+  setup file its proofs need. Empty, `~/.n8n/stellar-confidential`. Keep it: the RPC keeps contract
+  events for 7 days at most, as Stellar's
+  [events guide](https://developers.stellar.org/docs/build/guides/events/ingest) says, and without
+  the saved state the node can't spend funds whose events are older.
+- **Threads** (`threads`): how many threads proof generation uses. 1 by default.
+
+**Register** adds **Auditor ID** (`auditorId`, 0 by default): the auditor, in the token's auditor
+registry, that the account registers with. Its output has `account`, `token`, `registered`,
+`alreadyRegistered`, `txHash`, `ledger`, `syncedLedger` and `networkName`. An account that is
+already registered with the same key isn't registered again: nothing is sent, and
+`alreadyRegistered` is `true`. An account registered with another key fails the item. The tokens of
+the demo deployment are compliant tokens with an allowlist: the demo registers only accounts that
+the token's administrator allowed first.
+
+The node makes its proofs inside the n8n installation, with the copy of the Stellar Confidential
+Token SDK in `vendor/` ([VENDORED.md](vendor/stellar-confidential-token-sdk/VENDORED.md)). Before
+the first proof, it downloads the CRS, the setup file of the proofs, from `crs.aztec.network` into
+the state folder, so the first run takes longer. It submits through the RPC and judges each
+submission as the Stellar Signer does: `rejected`, `not_submitted` or `uncertain`. It needs a
+self-hosted n8n with disk access.
+
 ## Credentials
 
-The node uses the **Stellar Wallet API** credential (`stellarWalletApi`). Its one required field is
-**Secret Key** (`secretKey`). See [CREDENTIALS.md](CREDENTIALS.md) for what the secret key is, how
-to get one on Testnet and how to keep it safe.
+### Stellar Wallet API
+
+The Stellar Signer uses the **Stellar Wallet API** credential (`stellarWalletApi`). Its one required
+field is **Secret Key** (`secretKey`). See [CREDENTIALS.md](CREDENTIALS.md) for what the secret key
+is, how to get one on Testnet and how to keep it safe.
 
 The secret key lives only in the credential. The node never returns it in its output or in its error
 messages.
@@ -297,32 +625,80 @@ so these limits guard against mistakes, not against that person. The limit that 
 account: use one with only the funds the workflow needs.
 [CREDENTIALS.md](CREDENTIALS.md#limit-what-the-node-signs) has the details.
 
+### Confidential Token Holder API (in progress)
+
+The Confidential Token node uses the **Confidential Token Holder API** credential
+(`confidentialTokenHolderApi`). Its **Secret Key** is the holder's Stellar secret key, and it gives
+full access: whoever has it controls the account, and can see and spend its confidential balance.
+Its limits are written as in the Stellar Wallet API credential: **Maximum Amounts** and **Allowed
+Destinations**, checked on the amount before the node makes the proof, and **Maximum Fee**, checked
+on the total fee after the node simulates the transaction and before it signs it. Their error texts
+don't show amounts. The node applies these limits from Transfer and Withdraw on.
+
+## Security notes
+
+- **Maximum Amounts is per payment.** The Signer compares each payment operation with its limit on
+  its own, and there is no limit per transaction or per run. A **Payment › Batch** of payments that
+  are each under the limit is signed whole, and so are ten separate payments of 10 under a limit
+  of 10. To cap a run, keep only what it needs in the account.
+- **Execution data.** n8n saves each execution's input and output, which for these nodes includes
+  addresses, amounts and, for the Confidential Token node, the balances it decrypts. In the
+  workflows that use these nodes, especially the Confidential Token node, hide that data:
+  - On n8n Enterprise (Cloud or self-hosted, from n8n 2.16.0), turn on **Redact production execution
+    data** and **Redact manual execution data** in the workflow settings, as n8n's
+    [Redact execution data](https://docs.n8n.io/deploy/host-n8n/configure-n8n/security/redact-execution-data/)
+    page describes.
+  - On other editions, the workflow settings **Save successful production executions** and **Save
+    manual executions** decide whether n8n keeps those executions at all
+    ([Workflow settings](https://docs.n8n.io/workflows/settings/)).
+- **Keys.** Each secret key lives in its own credential and only one node reads it. Use a separate
+  account for each workflow, with only the funds it needs, and try workflows on Testnet first.
+
+## Testing status
+
+This section says plainly what was tested and what wasn't, as of 25-10-2026.
+
+- **Up to commit `14888e1`** (the Stellar Signer, the Stellar node, the Stellar Trigger, and the
+  copy of the Confidential Token SDK), the package has an automated suite of 879 tests with
+  `node:test`, kept outside this repository. It loads the compiled package with a fake n8n context,
+  and the submission tests use a local fake Horizon. 12 of them run only on request: real runs on
+  Testnet, and waits of 60 seconds.
+- **After `14888e1`**, the Confidential Token work is tested only end to end on Testnet, by choice:
+  no new tests went into the suite before the event. Its encrypted state, account lock, policy and
+  RPC submission were checked with scripts, and a real submission went through on Testnet (see
+  [ARCHITECTURE.md](ARCHITECTURE.md#evidence-on-testnet)).
+  <!-- CT-STATUS: add the end-to-end Testnet results of Register, Deposit, Merge, Get Balance,
+  Transfer and Withdraw here as tickets #93-#95 close. -->
+- **Not tested yet:** the RPC answers that can't be caused on request (`TRY_AGAIN_LATER`,
+  `DUPLICATE`, a transaction that stays pending, a failed one, an RPC that times out), which were
+  checked only with made-up answers; the rules for **RPC URL**; and an automated check that no
+  Confidential Token error carries a secret. The local tests for all of this come after the event,
+  in the project's ticket #104.
+- **In n8n itself:** the demo payment ran from n8n's engine on Testnet, from the command line, not
+  on n8n's screen. The Stellar Trigger is tested with the test harness, but it wasn't seen polling
+  inside n8n.
+- **Public network:** no real payment on the public network was tested.
+
+## Architecture and prior work
+
+- [ARCHITECTURE.md](ARCHITECTURE.md): which Stellar APIs each node uses, the operations and assets,
+  the contracts of the Confidential Token deployment on Testnet, and the transactions that prove the
+  demo ran.
+- [HACKMERIDIAN.md](HACKMERIDIAN.md): what existed before HackMeridian 2026, and what was built
+  during the event, commit by commit.
+
 ## Compatibility
 
 - Node.js 24 or later.
-- The node depends on `@stellar/stellar-sdk` 17.1.0, which npm installs with the package.
-
-## Usage
-
-The Stellar Signer sits between a node that builds a transaction and a node that uses the signed
-result:
-
-1. A previous node produces the unsigned transaction XDR, in an item that has a `networkName` field
-   with the network the transaction was built for.
-2. In the Stellar Signer, set **Transaction XDR** with an expression that reads that XDR from the
-   previous node's output, and choose the same network in **Network**.
-3. The next node reads the signed transaction with `{{ $json.signedXdr }}`. To send it to the
-   network from this node instead, turn on **Submit to Horizon** and read `{{ $json.ledger }}`.
-
-To co-sign a transaction that needs several signatures, because its account needs them or because an
-operation has another source account, pass `signedXdr` through another Stellar Signer with the
-credential of the next signer. Each key signs once: if the XDR already has a valid signature of the
-credential's key, the item fails before it is signed, because the network rejects a repeated
-signature with `tx_bad_auth_extra`. The network also rejects a signature that the account doesn't
-need: once the signatures reach the account's threshold, one more, even a valid one, gets
-`tx_bad_auth_extra`.
+- Tested with n8n 2.25.6, self-hosted.
+- The nodes depend on `@stellar/stellar-sdk` 17.1.0, which npm installs with the package. The copy
+  of the Confidential Token SDK uses `@stellar/stellar-sdk` 14.6.1, installed under the name
+  `stellar-sdk-14`, and `@aztec/bb.js` 0.87.0 for its proofs.
+- Not eligible for n8n Cloud: the package has runtime dependencies, and the Confidential Token node
+  needs disk access.
 
 ## Resources
 
 - [n8n community nodes documentation](https://docs.n8n.io/integrations/#community-nodes)
 - [Stellar transactions](https://developers.stellar.org/docs/learn/fundamentals/transactions)
+- [Stellar privacy: confidential tokens](https://developers.stellar.org/docs/build/apps/privacy#confidential-tokens)
