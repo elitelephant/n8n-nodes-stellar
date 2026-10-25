@@ -7,8 +7,10 @@ import type {
 	IPollFunctions,
 } from 'n8n-workflow';
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
-import { type Horizon, StrKey } from '@stellar/stellar-sdk';
+import { Asset, type Horizon, StrKey } from '@stellar/stellar-sdk';
 
+import { toAmount, toStroops } from '../shared/amount';
+import { assetName, toAsset } from '../shared/asset';
 import { horizonClientFor, nodeForErrors } from '../shared/horizon';
 import { isNetworkName, type NetworkName } from '../shared/network';
 import { findPayments, type PaymentsPage, type PaymentsQuery } from '../Stellar/transport/horizon';
@@ -107,6 +109,33 @@ export class StellarTrigger implements INodeType {
 				description:
 					"The Horizon server to poll, as an https address. Plain http works only for localhost, and the address can't have a user name or a password. Leave empty to use SDF's server for the network: horizon-testnet.stellar.org for testnet and horizon.stellar.org for public.",
 			},
+			{
+				displayName: 'Filters',
+				name: 'filters',
+				type: 'collection',
+				placeholder: 'Add Filter',
+				default: {},
+				displayOptions: { show: { event: ['paymentReceived'] } },
+				options: [
+					{
+						displayName: 'Asset',
+						name: 'asset',
+						type: 'string',
+						default: '',
+						placeholder: 'e.g. USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
+						description:
+							'Only payments in this asset start the workflow: XLM or native for lumens, or CODE:ISSUER for another asset',
+					},
+					{
+						displayName: 'Minimum Amount',
+						name: 'minimumAmount',
+						type: 'string',
+						default: '',
+						placeholder: 'e.g. 10',
+						description: 'Only payments of at least this amount start the workflow, to ignore spam',
+					},
+				],
+			},
 		],
 	};
 
@@ -122,9 +151,14 @@ export class StellarTrigger implements INodeType {
 			POLLS_OVER_HTTPS,
 		);
 		const account = readAccount(node, this.getNodeParameter('account', ''));
+		const filters = this.getNodeParameter('filters', {}) as IDataObject;
+		const filter: PaymentFilter = {
+			asset: readAssetFilter(node, filters.asset),
+			minimum: readMinimumFilter(node, filters.minimumAmount),
+		};
 
 		if (this.getMode() === 'manual') {
-			return [[{ json: await lastPaymentReceived(node, horizon, account, networkName) }]];
+			return [[{ json: await lastPaymentReceived(node, horizon, account, networkName, filter) }]];
 		}
 
 		const memory = this.getWorkflowStaticData('node') as TriggerMemory;
@@ -146,11 +180,12 @@ export class StellarTrigger implements INodeType {
 				cursor: cursor === FROM_START ? undefined : cursor,
 			});
 			for (const record of records) {
-				const item = receivedPaymentItem(record, account, networkName);
-				if (item !== undefined) {
-					received.push({ json: item });
+				const transfer = receivedTransfer(record, account);
+				if (transfer !== undefined && passes(transfer, filter)) {
+					received.push({ json: itemFor(record, transfer, networkName) });
 				}
-				// A record that isn't a payment to the account moves the cursor too.
+				// A record that isn't a payment to the account, or that the filters leave out, moves
+				// the cursor too.
 				cursor = record.paging_token;
 			}
 			if (records.length < PAGE_SIZE) {
@@ -193,6 +228,7 @@ async function lastPaymentReceived(
 	horizon: Horizon.Server,
 	account: string,
 	networkName: NetworkName,
+	filter: PaymentFilter,
 ): Promise<IDataObject> {
 	const page = await findPayments(
 		node,
@@ -206,14 +242,21 @@ async function lastPaymentReceived(
 	// Node's error codes, and an address can.
 	if (page === undefined) {
 		throw new NodeOperationError(node, `The account doesn't exist on ${networkName}`, {
-			description: `Horizon has no account ${account} on ${networkName}. Once the workflow is active, the trigger fires for the create account operation that creates it. To test it now, create the account first: on testnet, Friendbot can create it.`,
+			description: `Horizon has no account ${account} on ${networkName}. Once the workflow is active, the trigger fires for the create account operation that creates it, if it passes 'Filters'. To test it now, create the account first: on testnet, Friendbot can create it.`,
 		});
 	}
+	let filteredOut = false;
 	for (const record of page.records) {
-		const item = receivedPaymentItem(record, account, networkName);
-		if (item !== undefined) {
-			return item;
+		const transfer = receivedTransfer(record, account);
+		if (transfer !== undefined && passes(transfer, filter)) {
+			return itemFor(record, transfer, networkName);
 		}
+		filteredOut ||= transfer !== undefined;
+	}
+	if (filteredOut) {
+		throw new NodeOperationError(node, 'No payment received passes the filters', {
+			description: `Among the account's last ${PAGE_SIZE} operations, Horizon has payments received by ${account} on ${networkName}, but none passes 'Filters'. Change the filters, or send a payment that passes them, then fetch the test event again.`,
+		});
 	}
 	throw new NodeOperationError(node, 'No payment received yet', {
 		description: `Horizon has no payment received by ${account} on ${networkName} in the account's last ${PAGE_SIZE} operations. Send a payment to the account, then fetch the test event again.`,
@@ -227,40 +270,46 @@ type JoinedTransaction = Pick<
 	'memo_type' | 'memo' | 'ledger_attr'
 >;
 
-// The output item for a record that is a payment received by the account, or undefined for any
-// other record: a payment the account sent, a contract call, or an account merge.
-function receivedPaymentItem(
+// What a payment received by the account moved, or undefined for any other record: a payment the
+// account sent, a contract call, or an account merge.
+interface Transfer {
+	from: string;
+	to: string;
+	// As the Stellar Signer's policy writes it: XLM or CODE:ISSUER.
+	asset: string;
+	amount: string;
+}
+
+function receivedTransfer(
 	record: PaymentsPage['records'][number],
 	account: string,
-	networkName: NetworkName,
-): IDataObject | undefined {
-	let transfer: { from: string; to: string; asset: string; amount: string } | undefined;
+): Transfer | undefined {
 	if (record.type === 'create_account') {
-		if (record.account === account) {
-			transfer = {
-				from: record.funder,
-				to: record.account,
-				asset: 'XLM',
-				amount: record.starting_balance,
-			};
-		}
-	} else if (
-		record.type === 'payment' ||
-		record.type === 'path_payment_strict_receive' ||
-		record.type === 'path_payment_strict_send'
+		return record.account === account
+			? { from: record.funder, to: record.account, asset: 'XLM', amount: record.starting_balance }
+			: undefined;
+	}
+	if (
+		(record.type === 'payment' ||
+			record.type === 'path_payment_strict_receive' ||
+			record.type === 'path_payment_strict_send') &&
+		record.to === account
 	) {
-		if (record.to === account) {
-			transfer = {
-				from: record.from,
-				to: record.to,
-				asset: assetName(record.asset_type, record.asset_code, record.asset_issuer),
-				amount: record.amount,
-			};
-		}
+		const asset =
+			record.asset_type === 'native'
+				? Asset.native()
+				: new Asset(record.asset_code ?? '', record.asset_issuer);
+		return { from: record.from, to: record.to, asset: assetName(asset), amount: record.amount };
 	}
-	if (transfer === undefined) {
-		return undefined;
-	}
+	return undefined;
+}
+
+// The output item for a payment received: what it moved, with its memo, its transaction and when.
+function itemFor(
+	record: PaymentsPage['records'][number],
+	transfer: Transfer,
+	networkName: NetworkName,
+): IDataObject {
 	const transaction = (record as { transaction_attr?: JoinedTransaction }).transaction_attr;
 	return {
 		...transfer,
@@ -276,9 +325,59 @@ function receivedPaymentItem(
 	};
 }
 
-// An asset as the Stellar Signer's policy writes it: XLM, or CODE:ISSUER.
-function assetName(type: string, code: string | undefined, issuer: string | undefined): string {
-	return type === 'native' ? 'XLM' : `${code}:${issuer}`;
+// The filters of Payment Received: only payments in this asset, and of at least this amount, in
+// stroops. Each one is off when its parameter is empty.
+interface PaymentFilter {
+	asset?: string;
+	minimum?: bigint;
+}
+
+// The asset filter, as the policy writes it, or undefined for any asset. Spaces around it don't
+// count.
+function readAssetFilter(node: INode, value: unknown): string | undefined {
+	if (value === undefined || isEmptyText(value)) {
+		return undefined;
+	}
+	const asset = toAsset(typeof value === 'string' ? value.trim() : value);
+	if (asset === undefined) {
+		throw new NodeOperationError(node, "'Asset' isn't a valid Stellar asset", {
+			description:
+				'Write XLM or native for lumens, or CODE:ISSUER for another asset: its code, a colon, and the address of the account that issues it. Leave it empty for any asset.',
+		});
+	}
+	return assetName(asset);
+}
+
+// The minimum amount filter, in stroops, or undefined for any amount.
+function readMinimumFilter(node: INode, value: unknown): bigint | undefined {
+	if (value === undefined || isEmptyText(value)) {
+		return undefined;
+	}
+	const amount = toAmount(typeof value === 'string' ? value.trim() : value);
+	if (amount === undefined) {
+		throw new NodeOperationError(
+			node,
+			"'Minimum Amount' must be a positive number with up to 7 decimals",
+			{
+				description:
+					'Enter the smallest amount that starts the workflow, for example 10 or 0.5, or leave it empty for any amount.',
+			},
+		);
+	}
+	return toStroops(amount);
+}
+
+function isEmptyText(value: unknown): boolean {
+	return typeof value === 'string' && value.trim() === '';
+}
+
+// Whether a payment received passes the filters. A create account operation moves XLM, its
+// starting balance, so the filters apply to it too.
+function passes(transfer: Transfer, filter: PaymentFilter): boolean {
+	if (filter.asset !== undefined && transfer.asset !== filter.asset) {
+		return false;
+	}
+	return filter.minimum === undefined || toStroops(transfer.amount) >= filter.minimum;
 }
 
 function readNetwork(node: INode, value: unknown): NetworkName {
