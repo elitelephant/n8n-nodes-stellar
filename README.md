@@ -719,9 +719,10 @@ This section says plainly what was tested and what wasn't, as of 25-10-2026.
   (the account lock was checked only with two calls in one process); and restoring an archived
   account. The local tests for all of this come after HackMeridian 2026, in ticket #104 of the
   project's own tracker.
-- **In n8n itself:** the demo payment and a Confidential Token **Register** ran from n8n's engine on
-  Testnet, from the command line, not on n8n's screen. The Stellar Trigger is tested with the test
-  harness, but it wasn't seen polling inside n8n.
+- **In n8n itself:** the demo payment, a Confidential Token **Register**, and a confidential payment
+  of an invoice (register, deposit, automatic merge, transfer, and the supplier's merge) ran from
+  n8n's engine on Testnet, from the command line, not on n8n's screen. The Stellar Trigger is tested
+  with the test harness, but it wasn't seen polling inside n8n.
 - **Public network:** no real payment on the public network was tested.
 
 ## Architecture and prior work

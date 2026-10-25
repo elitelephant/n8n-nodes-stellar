@@ -77,6 +77,9 @@ auditor key of its own, a factory, and three tokens. [ARCHITECTURE.md](ARCHITECT
 - The supplier invoice workflow of [`examples/`](examples/) ran from n8n's engine on Testnet and
   paid invoice `INV-1001`. Its second run found the invoice paid and skipped it.
 - The Confidential Token node registered a new account from n8n's engine on Testnet.
+- The same supplier invoice, paid with the Confidential Token node between the same two accounts,
+  ran from n8n's engine on Testnet: both accounts register, the payer deposits, merges and
+  transfers, and the supplier merges.
 
 Their transactions are in [ARCHITECTURE.md](ARCHITECTURE.md#evidence-on-testnet).
 
