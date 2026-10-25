@@ -595,7 +595,7 @@ The outputs of Deposit, Merge, Get Balance, Transfer and Withdraw have `account`
 | Operation   | Also                                                                                  |
 | ----------- | ------------------------------------------------------------------------------------- |
 | Deposit     | `asset` (the token's underlying asset), `amount`, `txHash` and `ledger`               |
-| Merge       | `txHash` and `ledger`                                                                 |
+| Merge       | `asset`, `txHash` and `ledger`                                                        |
 | Get Balance | `asset`, `spendable` and `receiving`, with up to 7 decimals                           |
 | Transfer    | `asset`, `destination`, `amount`, `txHash`, `ledger`, `mergedFirst` and `mergeTxHash` |
 | Withdraw    | `asset`, `amount`, `txHash`, `ledger`, `mergedFirst` and `mergeTxHash`                |
@@ -661,11 +661,22 @@ account: use one with only the funds the workflow needs.
 The Confidential Token node uses the **Confidential Token Holder API** credential
 (`confidentialTokenHolderApi`). Its **Secret Key** is the holder's Stellar secret key, and it gives
 full access: whoever has it controls the account, and can see and spend its confidential balance.
-Its limits are written as in the Stellar Wallet API credential: **Maximum Amounts** and **Allowed
-Destinations**, checked on the amount before the node makes the proof, and **Maximum Fee**, checked
-on the item's total fee after the node simulates the transaction and before it signs it. Transfer
-checks all three, Withdraw checks **Maximum Amounts** and **Maximum Fee**, and Deposit checks none,
-because it only moves the account's own funds. Their error texts don't show amounts.
+Its limits are written as in the Stellar Wallet API credential, and only **Transfer** and
+**Withdraw** check them:
+
+- **Maximum Amounts** (`maxAmounts`): the most of each asset that one transfer or withdrawal may
+  move, compared with the token's public asset before the node makes the proof. While any limit is
+  set, a transfer or withdrawal of an asset without a line fails.
+- **Allowed Destinations** (`allowedDestinations`): the addresses this account may send a transfer
+  to. Only **Transfer** checks it, because a **Withdraw** always goes to the same account.
+- **Maximum Fee** (`maxFee`): the highest total fee of one **Transfer** or **Withdraw**, in stroops,
+  checked after the node simulates each transaction and before it signs it. It adds up every
+  transaction the item signs, the automatic merge and the transfer or withdrawal, each with its
+  resource fee and the rent of the ledger entries it writes. `0` means no limit.
+
+**Register**, **Deposit** and a **Merge** you run yourself have no limits: they don't send funds to
+another account. The error texts of the limits don't show amounts. When you save the credential,
+n8n's credential test also checks that its limits can be read.
 
 ## Security notes
 
