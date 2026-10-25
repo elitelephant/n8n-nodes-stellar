@@ -64,8 +64,9 @@ The branch `confidential-token` starts from `core-nodes` and adds the **Confiden
 | 21:14 | `88bfc63` | feat(shared): check confidential amounts and fees against the policy         |
 | 21:19 | `db6a18c` | feat(confidential): classify rpc submissions like the signer                 |
 | 21:26 | `53a0d1a` | feat(confidential): add the confidential token node with holder register     |
+| 21:55 | `751e624` | feat(confidential): add holder deposit, merge and get balance                |
 
-<!-- CT-STATUS: add the commits of Deposit, Merge, Get Balance, Transfer and Withdraw as they land. -->
+<!-- CT-STATUS: add the commits of Transfer and Withdraw as they land. -->
 
 Outside this repository, between 18:39 and 18:42 UTC, the project deployed its own set of
 confidential token contracts on Testnet, in 31 transactions: a verifier, an auditor registry with an
