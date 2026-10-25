@@ -133,6 +133,8 @@ at `https://horizon-testnet.stellar.org/transactions/<hash>`.
 | **Confidential Token › Holder › Register** of a new account in the token over XLM                                          | n8n's engine (`n8n execute`), not the screen | `bed12f3bbab810cc87a27b8da20d98269b862037bc1e61c954c855dfa74b5158` | 5388060 |
 | A `merge` of the deployment's test holder in the token over XLM, through the SDK's submission with the Signer's outcomes   | A script on the package's compiled SDK       | `3d809d1fcdfe463fdf7f7afdd6304cd28d5d87f05b7c4b024a722c20bb3f5202` | 5387880 |
 | The deployment's test holder registers in the token over XLM                                                               | The deployment script                        | `c12d35add940d83d5ae430e93c98a613d60b99f3d79a280dbc35a598da819b83` | 5386029 |
+| **Register** of a new, allowed account in the token over XLM, by the end-to-end Testnet test                               | The test harness, on the compiled node       | `be6a2337c4c940f3763aee1973b9bd76bb21d46c411edd5e0a103c5d4a8efb6b` | 5387994 |
+| An account registered with another key, set up so that **Register** with this credential fails without sending anything    | The SDK, as the test's setup                 | `7a795c70b1a3b1b236e609370d0d9aac2f4b81fdb705f81151bf133fab29af7a` | 5387998 |
 
 <!-- CT-STATUS: add the Testnet transactions of Deposit, Merge, Get Balance, Transfer and Withdraw
 here as tickets #94 and #95 close. -->
