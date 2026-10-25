@@ -15,10 +15,7 @@ export async function forEachItem(
 		try {
 			returnData.push({ json: await run(itemIndex), pairedItem: itemIndex });
 		} catch (error) {
-			// A NodeOperationError comes back as the same error and keeps its own itemIndex.
-			const nodeError = new NodeOperationError(node, error, { itemIndex });
-			// One that n8n built has the node as n8n keeps it, so it gets the copy.
-			Object.assign(nodeError, { node });
+			const nodeError = errorOfNode(node, error, itemIndex);
 			if (!context.continueOnFail()) {
 				throw nodeError;
 			}
@@ -26,4 +23,12 @@ export async function forEachItem(
 		}
 	}
 	return returnData;
+}
+
+// The error that an operation gives n8n: a NodeOperationError comes back as the same error and keeps
+// its own itemIndex, and one that n8n built gets the copy of the node with the Horizon URL hidden.
+export function errorOfNode(node: INode, error: unknown, itemIndex?: number): NodeOperationError {
+	const nodeError = new NodeOperationError(node, error as Error, { itemIndex });
+	Object.assign(nodeError, { node });
+	return nodeError;
 }

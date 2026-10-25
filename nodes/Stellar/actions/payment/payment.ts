@@ -7,8 +7,8 @@ import { assetName, assetOfBalance, toAsset } from '../../../shared/asset';
 import type { NetworkName } from '../../../shared/network';
 import { findAccount } from '../../transport/horizon';
 
-// The fields of a payment.
-const showFor = { show: { resource: ['payment'], operation: ['build'] } };
+// The fields of a payment, which Build and Batch share.
+const showFor = { show: { resource: ['payment'], operation: ['batch', 'build'] } };
 
 // "1" in base64: the value of config.memo_required on an account that asks for a memo (SEP-29).
 const ACCOUNT_REQUIRES_MEMO = 'MQ==';
@@ -26,7 +26,7 @@ export const fields: INodeProperties[] = [
 		placeholder: 'e.g. GABC...',
 		displayOptions: showFor,
 		description:
-			'The public key of the account that pays, starting with G. The transaction uses its next sequence number, and its key signs it in the Stellar Signer.',
+			'The public key of the account that pays, starting with G. The transaction uses its next sequence number, and its key signs it in the Stellar Signer. A batch takes it from the first item.',
 	},
 	{
 		displayName: 'Destination',
@@ -67,7 +67,7 @@ export const fields: INodeProperties[] = [
 		default: '',
 		placeholder: 'e.g. INV-1001',
 		displayOptions: showFor,
-		description: `A text memo of up to ${MEMO_TEXT_BYTES} bytes, such as the invoice number the receiver uses to match the payment. Leave empty for no memo, unless the destination asks for one (SEP-29).`,
+		description: `A text memo of up to ${MEMO_TEXT_BYTES} bytes, such as the invoice number the receiver uses to match the payment, or the ID of a payroll run in a batch, which takes it from the first item. Leave empty for no memo, unless the destination asks for one (SEP-29).`,
 	},
 	{
 		displayName: 'Time Limit (Seconds)',
@@ -81,7 +81,7 @@ export const fields: INodeProperties[] = [
 		validateType: 'number',
 		displayOptions: showFor,
 		description:
-			"How long the network accepts the transaction after it is built. Sign and submit it before then, or build it again. The time comes from Horizon's clock.",
+			"How long the network accepts the transaction after it is built. Sign and submit it before then, or build it again. The time comes from Horizon's clock. A batch takes it from the first item.",
 	},
 ];
 
@@ -89,19 +89,20 @@ export const fields: INodeProperties[] = [
 // transaction moves the account's sequence number on.
 export type SourceAccounts = Map<string, Horizon.AccountResponse>;
 
-// The source account, read from Horizon the first time the run needs it. An account that doesn't
+// The source account, read from Horizon the first time the run needs it, or every time without
+// sourceAccounts. An account that doesn't
 // exist on the network fails the item. The address goes in the description: n8n replaces a message
 // that happens to contain one of Node's error codes, and an address can.
 export async function sourceAccountFor(
 	node: INode,
 	horizon: Horizon.Server,
-	sourceAccounts: SourceAccounts,
+	sourceAccounts: SourceAccounts | undefined,
 	networkName: NetworkName,
 	sourceAccount: string,
 	itemIndex: number,
 ): Promise<Horizon.AccountResponse> {
 	const key = `${networkName} ${sourceAccount}`;
-	const known = sourceAccounts.get(key);
+	const known = sourceAccounts?.get(key);
 	if (known !== undefined) {
 		return known;
 	}
@@ -118,7 +119,7 @@ export async function sourceAccountFor(
 			description: `Horizon has no account ${sourceAccount} on ${networkName}, so nothing was built. Check 'Source Account' and 'Network'. An account exists only after another account creates it with XLM; on testnet, Friendbot can create it.`,
 		});
 	}
-	sourceAccounts.set(key, account);
+	sourceAccounts?.set(key, account);
 	return account;
 }
 

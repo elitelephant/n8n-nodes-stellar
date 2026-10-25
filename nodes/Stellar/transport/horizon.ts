@@ -163,6 +163,14 @@ export async function timeboundsFor(
 	}
 }
 
+// The errors of requests to Horizon that didn't get what the node needs, as opposed to an item
+// that is wrong: a batch fails whole for these.
+const requestFailures = new WeakSet<object>();
+
+export function isRequestFailure(error: unknown): boolean {
+	return typeof error === 'object' && error !== null && requestFailures.has(error);
+}
+
 // A request to Horizon that didn't get what the node needs. Only the host is named: the path of a
 // provider's address can carry a key.
 function requestFailed(
@@ -180,11 +188,13 @@ function requestFailed(
 				? `The answer from ${host} doesn't look like Horizon's: check 'Horizon URL'.`
 				: `Horizon at ${host} answered with an error. Wait and run it again, or check 'Horizon URL'.`;
 	}
-	return new NodeOperationError(node, error instanceof Error ? error : message, {
+	const failure = new NodeOperationError(node, error instanceof Error ? error : message, {
 		itemIndex,
 		message,
 		description,
 	});
+	requestFailures.add(failure);
+	return failure;
 }
 
 // Horizon names each of its errors with a type under this address.

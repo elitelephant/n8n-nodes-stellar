@@ -1,10 +1,11 @@
 import type { INodeProperties } from 'n8n-workflow';
 
+import * as batch from './batch.operation';
 import * as build from './build.operation';
 import * as getTransaction from './getTransaction.operation';
 import { fields as paymentFields } from './payment';
 
-export const operations = { build, getTransaction };
+export const operations = { batch, build, getTransaction };
 
 // The payment operations, shown right after the resource.
 export const operation: INodeProperties = {
@@ -14,6 +15,13 @@ export const operation: INodeProperties = {
 	noDataExpression: true,
 	displayOptions: { show: { resource: ['payment'] } },
 	options: [
+		{
+			name: 'Batch',
+			value: 'batch',
+			description:
+				'Build one unsigned transaction with a payment for each input item, such as a payroll run. The source account, the memo and the time limit come from the first item.',
+			action: 'Build payment batch',
+		},
 		{
 			name: 'Build',
 			value: 'build',
