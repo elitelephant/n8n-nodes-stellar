@@ -44,7 +44,7 @@ export class ConfidentialTokenHolderApi implements ICredentialType {
 			default: '',
 			placeholder: 'e.g. XLM=100',
 			description:
-				'The highest amount of each asset that one confidential transfer or withdrawal may move, one per line, as XLM=100 or CODE:ISSUER=100, where ISSUER is the address of the account that issues the asset. XLM can also be written native. While any limit is set, a transfer or withdrawal of an asset without a line fails. Leave empty for no limits.',
+				"The highest amount of each asset that one confidential transfer or withdrawal may move, one per line, as XLM=100 or CODE:ISSUER=100, where ISSUER is the address of the account that issues the asset. It is compared with the token's public asset, and only Transfer and Withdraw check it. XLM can also be written native. While any limit is set, a transfer or withdrawal of an asset without a line fails. Leave empty for no limits.",
 		},
 		{
 			displayName: 'Allowed Destinations',
@@ -56,7 +56,7 @@ export class ConfidentialTokenHolderApi implements ICredentialType {
 			default: '',
 			placeholder: 'e.g. GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
 			description:
-				'The addresses this account may send to in a confidential transfer or a withdrawal, one per line. Leave empty to send to any address.',
+				'The addresses this account may send a confidential transfer to, one per line. Only Transfer checks it: a Withdraw always goes to this same account. Leave empty to send to any address.',
 		},
 		{
 			displayName: 'Maximum Fee',
@@ -68,7 +68,7 @@ export class ConfidentialTokenHolderApi implements ICredentialType {
 			},
 			default: 0,
 			description:
-				"The highest fee that a transaction may carry, in stroops: 1 XLM is 10,000,000 stroops. It is the transaction's total fee, with its resource fee and the rent of the ledger entries it writes. 0 means no limit.",
+				'The highest total fee that one Transfer or Withdraw may carry, in stroops: 1 XLM is 10,000,000 stroops. It adds up the fee of every transaction the item signs, which is the automatic merge, if the node makes one, and the transfer or withdrawal, each with its resource fee and the rent of the ledger entries it writes. Register, Deposit and a Merge you run yourself have no fee limit. 0 means no limit.',
 		},
 	];
 }

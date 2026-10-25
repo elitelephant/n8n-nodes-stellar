@@ -76,7 +76,8 @@ function feeGuard(holder: HolderContext, policy: Policy): Signer {
 			total = fee < BigInt(0) ? fee : total + fee;
 			const violation = checkConfidentialFee(policy, total);
 			if (violation !== undefined) {
-				throw violationError(holder, violation);
+				// Marked so prepareSpend can tell the guard from any other error of the merge.
+				throw Object.assign(violationError(holder, violation), { feeLimit: true });
 			}
 			return await inner.sign(xdrBase64);
 		},
@@ -119,6 +120,25 @@ export function failureAfterMerge(
 			: '';
 	Object.assign(failure, { description: `${current}${note}` });
 	return failure;
+}
+
+// The fee guard's text says that a proof was discarded and that an earlier merge may have gone
+// through. When the guard stops the automatic merge neither is true: no proof exists yet and this is
+// the item's first merge. So the error keeps its message and gets a description for this case. Any
+// other error comes back as it is.
+function feeLimitOfMerge(node: HolderContext['node'], itemIndex: number, error: unknown): unknown {
+	if (typeof error !== 'object' || error === null || !('feeLimit' in error)) {
+		return error;
+	}
+	return new NodeOperationError(
+		node,
+		error instanceof Error ? error.message : 'The total fee is over the limit',
+		{
+			itemIndex,
+			description:
+				'The automatic merge this item needed would go over Maximum Fee, so nothing was proved, signed or sent for this item. Raise Maximum Fee, or merge the received balance first with a Merge, which has no fee limit.',
+		},
+	);
 }
 
 export interface SpendPlan {
@@ -190,7 +210,12 @@ export async function prepareSpend(
 					'The spendable balance, even with what the account received merged into it, is below the amount. Nothing was proved, signed or sent. Lower the amount, or deposit more into the confidential balance first.',
 			});
 		}
-		const merged = await submitMerge(client, signer, account);
+		let merged: Awaited<ReturnType<typeof submitMerge>>;
+		try {
+			merged = await submitMerge(client, signer, account);
+		} catch (error) {
+			throw feeLimitOfMerge(node, itemIndex, error);
+		}
 		mergedFirst = true;
 		mergeTxHash = merged.hash;
 		progress.mergeTxHash = merged.hash;

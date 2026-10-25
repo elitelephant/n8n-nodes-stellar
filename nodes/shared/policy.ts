@@ -509,7 +509,7 @@ export function checkMessageSigning(policy: Policy): PolicyViolation | undefined
 // the limit or the fee: errors and logs of that node never show them. Like the Signer's, the
 // message carries no text from the request, such as an address or an asset code. The asset and the
 // destination go in the description.
-const IN_HOLDER_CREDENTIAL = 'in the Confidential Token Holder credential';
+const IN_HOLDER_CREDENTIAL = 'in the Confidential Token Holder API credential';
 const NOT_PROVED = 'This item was not proved, signed or sent.';
 
 export interface ConfidentialRequest {
