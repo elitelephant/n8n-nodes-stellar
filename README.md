@@ -29,14 +29,15 @@ submit it, confirm the result, and avoid paying the same invoice twice. This pac
 those steps as an n8n node, so the whole payment runs inside the workflow, and the secret key stays
 in an n8n credential that only the Stellar Signer reads.
 
-| Node                   | What it does                                                                                                                                                                                 | Status          |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
-| **Stellar Signer**     | Signs a transaction with the credential's secret key, checks it first against limits set in the credential, and can submit it to the network. It can also sign a message (SEP-53).           | Built           |
-| **Stellar**            | Reads an account's balances, builds unsigned payments (one per item, or many in one transaction), checks whether an invoice was already paid, looks a transaction up, and builds trustlines. | Built           |
-| **Stellar Trigger**    | Starts the workflow when an account receives a payment, or when its balance goes below a threshold.                                                                                          | Built           |
-| **Confidential Token** | Registers an account in a confidential token on Testnet: a token designed to keep balances and amounts private while addresses stay public.                                                  | **In progress** |
+| Node                   | What it does                                                                                                                                                                                                               | Status          |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| **Stellar Signer**     | Signs a transaction with the credential's secret key, checks it first against limits set in the credential, and can submit it to the network. It can also sign a message (SEP-53).                                         | Built           |
+| **Stellar**            | Reads an account's balances, builds unsigned payments (one per item, or many in one transaction), checks whether an invoice was already paid, looks a transaction up, and builds trustlines.                               | Built           |
+| **Stellar Trigger**    | Starts the workflow when an account receives a payment, or when its balance goes below a threshold.                                                                                                                        | Built           |
+| **Confidential Token** | Registers an account in a confidential token on Testnet, deposits into its confidential balance and reads that balance. Confidential tokens are designed to keep balances and amounts private while addresses stay public. | **In progress** |
 
-<!-- CT-STATUS: update this row and the Confidential Token sections when ticket #95 closes. -->
+<!-- CT-STATUS: update this row and the Confidential Token sections when ticket #95 (Transfer and
+Withdraw) closes. -->
 
 The Stellar node has no key and signs nothing. The Stellar Signer is the only node that reads the
 Stellar Wallet API credential, so a workflow builds with the Stellar node, signs with the Signer,
@@ -540,8 +541,8 @@ the poll.
 
 **In progress.**
 
-<!-- CT-STATUS: this section describes the node as of commit 53a0d1a (Register). Update it when
-tickets #94 and #95 close. -->
+<!-- CT-STATUS: this section describes the node as of commit 751e624 (Register, Deposit, Merge and
+Get Balance). Update it when ticket #95 (Transfer and Withdraw) closes. -->
 
 [Confidential tokens](https://developers.stellar.org/docs/build/apps/privacy#confidential-tokens)
 "let users keep token balances and transaction amounts private while keeping the sender and
@@ -550,9 +551,8 @@ receiver's addresses publicly visible onchain". OpenZeppelin implements them for
 non-zero-knowledge UltraHonk proofs, so OpenZeppelin does not guarantee that proofs keep balances
 and amounts private." The node works only on Testnet.
 
-The **Confidential Token** node has one resource, **Holder**. Its operation **Register** registers
-the holder's account in a confidential token. **Deposit**, **Merge** and **Get Balance**, and then
-**Transfer** and **Withdraw**, are being built.
+The **Confidential Token** node has one resource, **Holder**, with four operations: **Register**,
+**Deposit**, **Merge** and **Get Balance**. **Transfer** and **Withdraw** are being built.
 
 Parameters:
 
@@ -576,6 +576,27 @@ changed later. Its output has `account`, `token`, `registered`, `alreadyRegister
 isn't registered again: nothing is sent, and `alreadyRegistered` is `true`. An account registered
 with another key fails the item. The tokens of the demo deployment are compliant tokens with an
 allowlist: the demo registers only accounts that the token's administrator allowed first.
+
+**Deposit** moves an **Amount** (`amount`) of the token's public asset from the account into its
+confidential balance, where it arrives in the receiving balance. It has no policy check, because it
+only moves the account's own funds. **Merge** moves the receiving balance into the spendable
+balance, which is the one the account can spend. **Get Balance** syncs the account's state and
+returns its decrypted balances, without sending anything. Deposit, Merge and Get Balance fail an
+account that isn't registered in the token, before anything is sent.
+
+Their outputs have `account`, `token`, `syncedLedger`, `syncWarning` and `networkName`, plus:
+
+| Operation   | Also                                                                    |
+| ----------- | ----------------------------------------------------------------------- |
+| Deposit     | `asset` (the token's underlying asset), `amount`, `txHash` and `ledger` |
+| Merge       | `txHash` and `ledger`                                                   |
+| Get Balance | `asset`, `spendable` and `receiving`, with up to 7 decimals             |
+
+`syncWarning` is `null`, or a text when the balance may be short: the last sync is older than the
+events the RPC keeps, or there was no saved state and the balance was rebuilt only from those
+events. If a Deposit or a Merge was applied but the sync after it failed, the item doesn't fail: it
+comes out with `syncedLedger` set to `null` and a `syncWarning` that asks to run Get Balance, so
+that a workflow doesn't repeat the deposit.
 
 The node makes its proofs inside the n8n installation, with the copy of the Stellar Confidential
 Token SDK in `vendor/` ([VENDORED.md](vendor/stellar-confidential-token-sdk/VENDORED.md)). Before
@@ -678,8 +699,10 @@ This section says plainly what was tested and what wasn't, as of 25-10-2026.
   the only tests added to the suite are opt-in runs on Testnet, and no local tests were added before
   26-10-2026. Its encrypted state, account lock, policy and RPC submission were also checked with
   scripts. The Testnet transactions are in [ARCHITECTURE.md](ARCHITECTURE.md#evidence-on-testnet).
-  <!-- CT-STATUS: add the end-to-end Testnet results of Register, Deposit, Merge, Get Balance,
-  Transfer and Withdraw here as tickets #93-#95 close. -->
+  Register, Deposit, Merge and Get Balance passed their end-to-end tests on Testnet: the balance
+  matched the one on the chain, and without the state folder it was rebuilt from the RPC's events.
+  <!-- CT-STATUS: add the end-to-end Testnet results of Transfer and Withdraw when ticket #95
+  closes. -->
 - **Not tested yet:** the RPC answers that can't be caused on request (`TRY_AGAIN_LATER`,
   `DUPLICATE`, a transaction that stays pending, a failed one, an RPC that times out), which were
   checked only with made-up answers; the rules for **RPC URL**; an automated check that no
