@@ -11,7 +11,7 @@ const ENTER_HORIZON_URL =
 	"Enter the address of a Horizon server, for example https://horizon-testnet.stellar.org, or leave the field empty to use SDF's server for the network.";
 
 // The hosts that are this same machine, as Stellar Lab lists them.
-const LOCAL_HOSTNAMES = ['localhost', '127.0.0.1', '[::1]'];
+export const LOCAL_HOSTNAMES = ['localhost', '127.0.0.1', '[::1]'];
 
 // The Horizon client for an item, or for a trigger's poll, which has no item index. A Horizon URL
 // that can't be used fails the item here. A value

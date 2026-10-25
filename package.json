@@ -48,12 +48,14 @@
     "n8nNodesApiVersion": 1,
     "strict": false,
     "credentials": [
-      "dist/credentials/StellarWalletApi.credentials.js"
+      "dist/credentials/StellarWalletApi.credentials.js",
+      "dist/credentials/ConfidentialTokenHolderApi.credentials.js"
     ],
     "nodes": [
       "dist/nodes/StellarSigner/StellarSigner.node.js",
       "dist/nodes/Stellar/Stellar.node.js",
-      "dist/nodes/StellarTrigger/StellarTrigger.node.js"
+      "dist/nodes/StellarTrigger/StellarTrigger.node.js",
+      "dist/nodes/ConfidentialToken/ConfidentialToken.node.js"
     ]
   },
   "devDependencies": {

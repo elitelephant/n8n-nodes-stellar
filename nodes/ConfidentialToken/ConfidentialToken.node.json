@@ -1,0 +1,20 @@
+{
+	"node": "n8n-nodes-stellar.confidentialToken",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Finance & Accounting"],
+	"alias": [
+		"Confidential",
+		"Privacy",
+		"ZK",
+		"XLM",
+		"Blockchain",
+		"Crypto",
+		"Cryptocurrency",
+		"Web3",
+		"Stellar"
+	],
+	"resources": {
+		"primaryDocumentation": [{ "url": "https://github.com/yripper/n8n-nodes-stellar" }]
+	}
+}
