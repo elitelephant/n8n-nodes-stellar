@@ -7,13 +7,20 @@ import type {
 	IPollFunctions,
 } from 'n8n-workflow';
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
-import { Asset, type Horizon, StrKey } from '@stellar/stellar-sdk';
+import { type Horizon, StrKey } from '@stellar/stellar-sdk';
 
 import { toAmount, toStroops } from '../shared/amount';
 import { assetName, toAsset } from '../shared/asset';
 import { horizonClientFor, nodeForErrors } from '../shared/horizon';
 import { isNetworkName, type NetworkName } from '../shared/network';
-import { findPayments, type PaymentsPage, type PaymentsQuery } from '../Stellar/transport/horizon';
+import {
+	findPayments,
+	joinedTransaction,
+	type PaymentsPage,
+	type PaymentsQuery,
+	receivedTransfer,
+	type Transfer,
+} from '../Stellar/transport/horizon';
 
 const POLLS_OVER_HTTPS =
 	"This node polls a Horizon server over https. Plain http is accepted only for localhost. Enter an https address, or leave the field empty to use SDF's server for the network.";
@@ -263,63 +270,18 @@ async function lastPaymentReceived(
 	});
 }
 
-// The transaction that Horizon joins to each record, with its memo. The SDK keeps it in
-// transaction_attr, which its types don't declare, and moves its ledger to ledger_attr.
-type JoinedTransaction = Pick<
-	Horizon.ServerApi.TransactionRecord,
-	'memo_type' | 'memo' | 'ledger_attr'
->;
-
-// What a payment received by the account moved, or undefined for any other record: a payment the
-// account sent, a contract call, or an account merge.
-interface Transfer {
-	from: string;
-	to: string;
-	// As the Stellar Signer's policy writes it: XLM or CODE:ISSUER.
-	asset: string;
-	amount: string;
-}
-
-function receivedTransfer(
-	record: PaymentsPage['records'][number],
-	account: string,
-): Transfer | undefined {
-	if (record.type === 'create_account') {
-		return record.account === account
-			? { from: record.funder, to: record.account, asset: 'XLM', amount: record.starting_balance }
-			: undefined;
-	}
-	if (
-		(record.type === 'payment' ||
-			record.type === 'path_payment_strict_receive' ||
-			record.type === 'path_payment_strict_send') &&
-		record.to === account
-	) {
-		const asset =
-			record.asset_type === 'native'
-				? Asset.native()
-				: new Asset(record.asset_code ?? '', record.asset_issuer);
-		return { from: record.from, to: record.to, asset: assetName(asset), amount: record.amount };
-	}
-	return undefined;
-}
-
 // The output item for a payment received: what it moved, with its memo, its transaction and when.
 function itemFor(
 	record: PaymentsPage['records'][number],
 	transfer: Transfer,
 	networkName: NetworkName,
 ): IDataObject {
-	const transaction = (record as { transaction_attr?: JoinedTransaction }).transaction_attr;
+	const { memo, ledger } = joinedTransaction(record);
 	return {
 		...transfer,
-		// As Horizon gives it: a text, an id in decimal, or a hash in base64.
-		memo:
-			transaction === undefined || transaction.memo_type === 'none'
-				? null
-				: (transaction.memo ?? null),
+		memo,
 		txHash: record.transaction_hash,
-		ledger: transaction?.ledger_attr ?? null,
+		ledger,
 		createdAt: record.created_at,
 		networkName,
 	};

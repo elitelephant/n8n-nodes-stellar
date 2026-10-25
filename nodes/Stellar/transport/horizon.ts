@@ -1,7 +1,8 @@
 import type { INode } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
-import { type Horizon, NetworkError, NotFoundError } from '@stellar/stellar-sdk';
+import { Asset, type Horizon, NetworkError, NotFoundError } from '@stellar/stellar-sdk';
 
+import { assetName } from '../../shared/asset';
 import { horizonClientFor } from '../../shared/horizon';
 import type { NetworkName } from '../../shared/network';
 
@@ -108,6 +109,65 @@ export async function findPayments(
 		request.cursor(page.cursor);
 	}
 	return await unlessMissing(node, horizon, async () => await request.call(), failure, itemIndex);
+}
+
+// What a payment received by an account moved, as Horizon lists it under the account's payments.
+export interface Transfer {
+	from: string;
+	to: string;
+	// As the Stellar Signer's policy writes it: XLM or CODE:ISSUER.
+	asset: string;
+	amount: string;
+}
+
+// The transfer of a record that is a payment received by the account: a payment or a path payment to
+// it, or the create account operation that creates it. Undefined for any other record: a payment the
+// account sent, a contract call, or an account merge.
+export function receivedTransfer(
+	record: PaymentsPage['records'][number],
+	account: string,
+): Transfer | undefined {
+	if (record.type === 'create_account') {
+		return record.account === account
+			? { from: record.funder, to: record.account, asset: 'XLM', amount: record.starting_balance }
+			: undefined;
+	}
+	if (
+		(record.type === 'payment' ||
+			record.type === 'path_payment_strict_receive' ||
+			record.type === 'path_payment_strict_send') &&
+		record.to === account
+	) {
+		const asset =
+			record.asset_type === 'native'
+				? Asset.native()
+				: new Asset(record.asset_code ?? '', record.asset_issuer);
+		return { from: record.from, to: record.to, asset: assetName(asset), amount: record.amount };
+	}
+	return undefined;
+}
+
+// The transaction that Horizon joins to each record. The SDK keeps it in transaction_attr, which its
+// types don't declare, and moves its ledger to ledger_attr.
+type JoinedTransaction = Pick<
+	Horizon.ServerApi.TransactionRecord,
+	'memo_type' | 'memo' | 'ledger_attr'
+>;
+
+// The memo and the ledger of a record's joined transaction. The memo is as Horizon gives it: a text,
+// an id in decimal, or a hash in base64, and null without one.
+export function joinedTransaction(record: PaymentsPage['records'][number]): {
+	memo: string | null;
+	ledger: number | null;
+} {
+	const transaction = (record as { transaction_attr?: JoinedTransaction }).transaction_attr;
+	return {
+		memo:
+			transaction === undefined || transaction.memo_type === 'none'
+				? null
+				: (transaction.memo ?? null),
+		ledger: transaction?.ledger_attr ?? null,
+	};
 }
 
 // The base fee of the last ledger, per operation, in stroops. The SDK reads it from Horizon's
