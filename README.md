@@ -29,15 +29,12 @@ submit it, confirm the result, and avoid paying the same invoice twice. This pac
 those steps as an n8n node, so the whole payment runs inside the workflow, and the secret key stays
 in an n8n credential that only the Stellar Signer reads.
 
-| Node                   | What it does                                                                                                                                                                                                               | Status          |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
-| **Stellar Signer**     | Signs a transaction with the credential's secret key, checks it first against limits set in the credential, and can submit it to the network. It can also sign a message (SEP-53).                                         | Built           |
-| **Stellar**            | Reads an account's balances, builds unsigned payments (one per item, or many in one transaction), checks whether an invoice was already paid, looks a transaction up, and builds trustlines.                               | Built           |
-| **Stellar Trigger**    | Starts the workflow when an account receives a payment, or when its balance goes below a threshold.                                                                                                                        | Built           |
-| **Confidential Token** | Registers an account in a confidential token on Testnet, deposits into its confidential balance and reads that balance. Confidential tokens are designed to keep balances and amounts private while addresses stay public. | **In progress** |
-
-<!-- CT-STATUS: update this row and the Confidential Token sections when ticket #95 (Transfer and
-Withdraw) closes. -->
+| Node                   | What it does                                                                                                                                                                                                                                                                              | Status |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| **Stellar Signer**     | Signs a transaction with the credential's secret key, checks it first against limits set in the credential, and can submit it to the network. It can also sign a message (SEP-53).                                                                                                        | Built  |
+| **Stellar**            | Reads an account's balances, builds unsigned payments (one per item, or many in one transaction), checks whether an invoice was already paid, looks a transaction up, and builds trustlines.                                                                                              | Built  |
+| **Stellar Trigger**    | Starts the workflow when an account receives a payment, or when its balance goes below a threshold.                                                                                                                                                                                       | Built  |
+| **Confidential Token** | Holds a confidential token on Testnet: registers an account, deposits into its confidential balance, transfers amounts to other registered accounts, withdraws, and reads the balance. Confidential tokens are designed to keep balances and amounts private while addresses stay public. | Built  |
 
 The Stellar node has no key and signs nothing. The Stellar Signer is the only node that reads the
 Stellar Wallet API credential, so a workflow builds with the Stellar node, signs with the Signer,
@@ -539,11 +536,6 @@ the poll.
 
 ### Confidential Token
 
-**In progress.**
-
-<!-- CT-STATUS: this section describes the node as of commit 751e624 (Register, Deposit, Merge and
-Get Balance). Update it when ticket #95 (Transfer and Withdraw) closes. -->
-
 [Confidential tokens](https://developers.stellar.org/docs/build/apps/privacy#confidential-tokens)
 "let users keep token balances and transaction amounts private while keeping the sender and
 receiver's addresses publicly visible onchain". OpenZeppelin implements them for Stellar in its
@@ -551,8 +543,8 @@ receiver's addresses publicly visible onchain". OpenZeppelin implements them for
 non-zero-knowledge UltraHonk proofs, so OpenZeppelin does not guarantee that proofs keep balances
 and amounts private." The node works only on Testnet.
 
-The **Confidential Token** node has one resource, **Holder**, with four operations: **Register**,
-**Deposit**, **Merge** and **Get Balance**. **Transfer** and **Withdraw** are being built.
+The **Confidential Token** node has one resource, **Holder**, with six operations: **Register**,
+**Deposit**, **Merge**, **Get Balance**, **Transfer** and **Withdraw**.
 
 Parameters:
 
@@ -584,13 +576,29 @@ balance, which is the one the account can spend. **Get Balance** syncs the accou
 returns its decrypted balances, without sending anything. Deposit, Merge and Get Balance fail an
 account that isn't registered in the token, before anything is sent.
 
-Their outputs have `account`, `token`, `syncedLedger`, `syncWarning` and `networkName`, plus:
+**Transfer** sends an **Amount** (`amount`) from the confidential balance to a **Destination**
+(`destination`), a `G` address that is already registered in the token, where it arrives in the
+receiving balance. The amount isn't sent in clear, but see the verifier's warning above.
+**Withdraw** moves an **Amount** from the confidential balance back to the account's public balance;
+that amount is public on the chain. Before it makes the proof, the node checks the plain amount
+against the credential's limits: **Transfer** against **Maximum Amounts** and **Allowed
+Destinations**, and **Withdraw** against **Maximum Amounts**, in the token's underlying asset. If
+the spendable balance is short but the spendable and receiving balances together are enough, the
+node merges first, on its own. If both together are short, the item fails before anything is proved,
+signed or sent. After it simulates each transaction and before it signs it, the node checks
+**Maximum Fee** against the item's total fee, including the automatic merge's. If an item fails
+after an automatic merge, its error gives that merge's hash.
 
-| Operation   | Also                                                                    |
-| ----------- | ----------------------------------------------------------------------- |
-| Deposit     | `asset` (the token's underlying asset), `amount`, `txHash` and `ledger` |
-| Merge       | `txHash` and `ledger`                                                   |
-| Get Balance | `asset`, `spendable` and `receiving`, with up to 7 decimals             |
+The outputs of Deposit, Merge, Get Balance, Transfer and Withdraw have `account`, `token`,
+`syncedLedger`, `syncWarning` and `networkName`, plus:
+
+| Operation   | Also                                                                                  |
+| ----------- | ------------------------------------------------------------------------------------- |
+| Deposit     | `asset` (the token's underlying asset), `amount`, `txHash` and `ledger`               |
+| Merge       | `txHash` and `ledger`                                                                 |
+| Get Balance | `asset`, `spendable` and `receiving`, with up to 7 decimals                           |
+| Transfer    | `asset`, `destination`, `amount`, `txHash`, `ledger`, `mergedFirst` and `mergeTxHash` |
+| Withdraw    | `asset`, `amount`, `txHash`, `ledger`, `mergedFirst` and `mergeTxHash`                |
 
 `syncWarning` is `null`, or a text when the balance may be short: the last sync is older than the
 events the RPC keeps, or there was no saved state and the balance was rebuilt only from those
@@ -650,15 +658,14 @@ account: use one with only the funds the workflow needs.
 
 ### Confidential Token Holder API
 
-**In progress.**
-
 The Confidential Token node uses the **Confidential Token Holder API** credential
 (`confidentialTokenHolderApi`). Its **Secret Key** is the holder's Stellar secret key, and it gives
 full access: whoever has it controls the account, and can see and spend its confidential balance.
 Its limits are written as in the Stellar Wallet API credential: **Maximum Amounts** and **Allowed
 Destinations**, checked on the amount before the node makes the proof, and **Maximum Fee**, checked
-on the total fee after the node simulates the transaction and before it signs it. Their error texts
-don't show amounts. The node applies these limits from Transfer and Withdraw on.
+on the item's total fee after the node simulates the transaction and before it signs it. Transfer
+checks all three, Withdraw checks **Maximum Amounts** and **Maximum Fee**, and Deposit checks none,
+because it only moves the account's own funds. Their error texts don't show amounts.
 
 ## Security notes
 
@@ -701,8 +708,10 @@ This section says plainly what was tested and what wasn't, as of 25-10-2026.
   scripts. The Testnet transactions are in [ARCHITECTURE.md](ARCHITECTURE.md#evidence-on-testnet).
   Register, Deposit, Merge and Get Balance passed their end-to-end tests on Testnet: the balance
   matched the one on the chain, and without the state folder it was rebuilt from the RPC's events.
-  <!-- CT-STATUS: add the end-to-end Testnet results of Transfer and Withdraw when ticket #95
-  closes. -->
+  Transfer and Withdraw passed an end-to-end test of the whole flow on Testnet: two accounts
+  register, one deposits, merges on its own and transfers to the other, which merges and withdraws,
+  and a run with two items follows. The final balances matched the chain, and with a low **Maximum
+  Amounts** or **Maximum Fee** the transfer failed without sending anything.
 - **Not tested yet:** the RPC answers that can't be caused on request (`TRY_AGAIN_LATER`,
   `DUPLICATE`, a transaction that stays pending, a failed one, an RPC that times out), which were
   checked only with made-up answers; the rules for **RPC URL**; an automated check that no
