@@ -171,9 +171,10 @@ actual node.
   `nodes/ConfidentialToken/state/`, and the derivation of its keys, which recalculates the SEP-53
   signature on every run and never stores it, in `nodes/ConfidentialToken/keys.ts`.
 - `vendor/stellar-confidential-token-sdk/` is a copy of a third-party SDK, compiled with the
-  package. ESLint and Prettier skip its `src/`. Change it only when you must, mark every changed
-  line with a comment that starts with `n8n-nodes-stellar:` (or a `begin`/`end` pair of them around
-  a block), and list the change in its `VENDORED.md`.
+  package. ESLint skips its `src/`, and Prettier skips the whole folder but `VENDORED.md` and
+  `additions/`. Change it only when you must, mark every changed line with a comment that starts
+  with `n8n-nodes-stellar:` (or a `begin`/`end` pair of them around a block), and list the change in
+  its `VENDORED.md`.
 - The value of **Horizon URL** can carry a provider's key. The node keeps it out of the errors that
   n8n stores and sends to an error workflow. Every error that the node creates, or that passes
   through its `catch` blocks, gets a copy of the node with that parameter hidden (`nodeForErrors`),
