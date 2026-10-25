@@ -135,6 +135,12 @@ at `https://horizon-testnet.stellar.org/transactions/<hash>`.
 | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------ | ------- |
 | The demo: invoice `INV-1001`, 25 XLM to the supplier, built by **Payment › Build** and submitted by the **Stellar Signer** | n8n's engine (`n8n execute`), not the screen | `4d5f6d52c8b7fae8c81a2ee6dbacd33710313105287d4a5d51fb540dc48cac0a` | 5387451 |
 | **Confidential Token › Holder › Register** of a new account in the token over XLM                                          | n8n's engine (`n8n execute`), not the screen | `bed12f3bbab810cc87a27b8da20d98269b862037bc1e61c954c855dfa74b5158` | 5388060 |
+| The confidential payment of invoice `INV-2001`, between the demo's payer and supplier: **Register** of the supplier        | n8n's engine (`n8n execute`), not the screen | `183f5612975f4277a2495d1cd0164a47483173e2fcb46630c6ec512d076638e7` | 5388705 |
+| The same payment: **Register** of the payer                                                                                | n8n's engine (`n8n execute`), not the screen | `1607fe11b6e2d04ad54fee0905c4ff066f93f67795fdb47b67f8046f4d4511b0` | 5388708 |
+| The same payment: **Deposit** of 25 XLM by the payer                                                                       | n8n's engine (`n8n execute`), not the screen | `08df92221bb2db386032f5a050933ce4d9c9a043ed8a1ebb3a54aa59a360f64f` | 5388710 |
+| The same payment: the payer's automatic **Merge**                                                                          | n8n's engine (`n8n execute`), not the screen | `4c178ae72573c135e4aa7797e2f82799f4545cc01f51f80ae80588086df05bf9` | 5388712 |
+| The same payment: **Transfer** of 25 XLM to the supplier                                                                   | n8n's engine (`n8n execute`), not the screen | `f8a604e351e618ab520ab1f02d388d60d99c7270c57d77542fba3637915e827e` | 5388714 |
+| The same payment: the supplier's **Merge**, which leaves 25 XLM in its spendable balance                                   | n8n's engine (`n8n execute`), not the screen | `13c2b18cbd754eb67b9f4f4b76ec59120e99658c1d9031aeffb1c554c60cb80e` | 5388717 |
 | A `merge` of the deployment's test holder in the token over XLM, through the SDK's submission with the Signer's outcomes   | A script on the package's compiled SDK       | `3d809d1fcdfe463fdf7f7afdd6304cd28d5d87f05b7c4b024a722c20bb3f5202` | 5387880 |
 | The deployment's test holder registers in the token over XLM                                                               | The deployment script                        | `c12d35add940d83d5ae430e93c98a613d60b99f3d79a280dbc35a598da819b83` | 5386029 |
 | **Register** of a new, allowed account in the token over XLM, by the end-to-end Testnet test                               | The test harness, on the compiled node       | `be6a2337c4c940f3763aee1973b9bd76bb21d46c411edd5e0a103c5d4a8efb6b` | 5387994 |
@@ -154,6 +160,12 @@ at `https://horizon-testnet.stellar.org/transactions/<hash>`.
 
 A second run of the demo with the same invoice found it paid with **Payment › Check Paid** and
 skipped it, so it sent nothing.
+
+The public payment of `INV-1001` and the confidential payment of `INV-2001` go between the same two
+accounts, so they can be compared on an explorer. The public payment carries its amount in its
+`payment` operation. The confidential `confidential_transfer(from, to, data)` call has no amount
+argument, but the `deposit(from, to, amount)` that funds it does, so a deposit's amount is public
+(`vendor/stellar-confidential-token-sdk/src/chain/contract.ts`).
 
 ## Testing status
 
