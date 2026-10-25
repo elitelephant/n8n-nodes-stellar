@@ -85,10 +85,50 @@ credential field:
 
 ## Try it without installing
 
-<!-- JUDGES-URL: the address of the public n8n instance for the HackMeridian judges goes here. -->
+A public n8n instance, n8n 2.25.6 Community, runs these nodes on Testnet at
+[demo.elitelephant.dev](https://demo.elitelephant.dev), so you can try them without installing
+anything. It was set up for the HackMeridian 2026 judges.
 
-A public n8n instance with these nodes installed, for trying them without installing anything, is
-being set up. Its address will be here.
+### Pay an invoice from a form
+
+Open [demo.elitelephant.dev/form/pay-invoice](https://demo.elitelephant.dev/form/pay-invoice); it
+needs no login. Enter an invoice number and an amount in XLM. The form runs the supplier payment
+workflow: it checks that the invoice wasn't paid, builds the payment, signs and submits it with the
+Stellar Signer, and shows one of three answers:
+
+| Answer                         | When                                                                                                                                                                                                                                         |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Paid on Stellar Testnet"      | The payment went through. It gives the transaction hash, the ledger and a "View it on stellar.expert" link to the transaction.                                                                                                               |
+| "This invoice is already paid" | The same invoice and amount were already paid, so nothing was sent. It gives the earlier transaction.                                                                                                                                        |
+| "Not paid"                     | Something stopped the payment, and the answer says what. The payer's credential has a **Maximum Amounts** of `XLM=100`, so for 150 XLM the Stellar Signer refuses it before signing: "Operation 1 sends more than 'Maximum Amounts' allows". |
+
+Things to try:
+
+- An invoice that was already paid: the form answers "This invoice is already paid".
+- An amount over 100 XLM: "Not paid", from the credential's limit.
+- An empty invoice, an amount such as `-5` or `abc`, or an invoice longer than 28 bytes (the most a
+  text memo holds): the answer names the field to fix, such as "'Amount' must be a positive number
+  with up to 7 decimals".
+- Two payments at the same time: they are processed one after the other, and the same invoice sent
+  twice at once is paid once.
+
+### Open the editor
+
+Log in at [demo.elitelephant.dev](https://demo.elitelephant.dev) as a member, with the email
+`demo@elitelephant.dev` and the password `HackMeridian2026`. The editor shows the demo's two
+workflows, the payer's credential and every execution, which n8n keeps by default, so you can follow
+each payment, also the ones answered "Not paid". Several judges can use the account at once. The
+account's email and password, the demo workflows' published versions and their credential can't be
+changed: editing a workflow changes only its draft, not the version that the form runs. You can also
+create workflows of your own and use the credential in them, within its policy: payments of up to
+100 XLM to the demo's supplier account.
+
+In any run, open the **Links for judges** node to see the transaction hash and links to
+stellar.expert and Horizon.
+
+One known limit: two runs of the payment workflow started by hand in the editor at the same time can
+collide: one of them comes out `uncertain` and its payment isn't applied, and its error explains
+why. The public form doesn't collide: it processes payments one after the other.
 
 ## Run the demo
 
