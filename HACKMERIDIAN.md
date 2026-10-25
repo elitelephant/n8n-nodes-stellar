@@ -54,19 +54,19 @@ Payment and Asset) and the **Stellar Trigger**:
 
 The branch `confidential-token` starts from `core-nodes` and adds the **Confidential Token** node:
 
-| Time  | Commit    | What                                                                         |
-| ----- | --------- | ---------------------------------------------------------------------------- |
-| 16:37 | `14cf930` | chore(confidential): copy the confidential token sdk at aad1706              |
-| 16:47 | `cd5ce64` | chore(confidential): compile the copied sdk to commonjs in the package build |
-| 20:37 | `71ff984` | merge core-nodes into confidential-token                                     |
-| 20:41 | `14888e1` | refactor(shared): move the signer policy to the shared module                |
-| 21:11 | `c07784f` | feat(confidential): add the encrypted state store and the account lock       |
-| 21:14 | `88bfc63` | feat(shared): check confidential amounts and fees against the policy         |
-| 21:19 | `db6a18c` | feat(confidential): classify rpc submissions like the signer                 |
-| 21:26 | `53a0d1a` | feat(confidential): add the confidential token node with holder register     |
-| 21:55 | `751e624` | feat(confidential): add holder deposit, merge and get balance                |
-
-<!-- CT-STATUS: add the commits of Transfer and Withdraw as they land. -->
+| Time  | Commit    | What                                                                                 |
+| ----- | --------- | ------------------------------------------------------------------------------------ |
+| 16:37 | `14cf930` | chore(confidential): copy the confidential token sdk at aad1706                      |
+| 16:47 | `cd5ce64` | chore(confidential): compile the copied sdk to commonjs in the package build         |
+| 20:37 | `71ff984` | merge core-nodes into confidential-token                                             |
+| 20:41 | `14888e1` | refactor(shared): move the signer policy to the shared module                        |
+| 21:11 | `c07784f` | feat(confidential): add the encrypted state store and the account lock               |
+| 21:14 | `88bfc63` | feat(shared): check confidential amounts and fees against the policy                 |
+| 21:19 | `db6a18c` | feat(confidential): classify rpc submissions like the signer                         |
+| 21:26 | `53a0d1a` | feat(confidential): add the confidential token node with holder register             |
+| 21:55 | `751e624` | feat(confidential): add holder deposit, merge and get balance                        |
+| 22:08 | `02c0ae3` | fix(confidential): point the holder credential to its readme section                 |
+| 22:17 | `c2d7e3d` | feat(confidential): add holder transfer and withdraw with policy and automatic merge |
 
 Outside this repository, between 18:39 and 18:42 UTC, the project deployed its own set of
 confidential token contracts on Testnet, in 31 transactions: a verifier, an auditor registry with an
