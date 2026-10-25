@@ -50,7 +50,7 @@ The version published on npm, 0.2.0, has only the Stellar Signer. To install the
 the package from this repository and install it into your self-hosted n8n:
 
 ```bash
-git clone https://github.com/elitelephant/n8n-nodes-stellar.git
+git clone --branch confidential-token https://github.com/elitelephant/n8n-nodes-stellar.git
 cd n8n-nodes-stellar
 npm ci
 npm run build
@@ -83,7 +83,7 @@ credential field:
   Empty, they use SDF's Horizon server for the chosen network.
 - The Confidential Token node takes an optional **RPC URL** and a **State Folder**, where it keeps
   each account's encrypted state and the setup file its proofs need. Empty, the folder is
-  `~/.n8n/stellar-confidential`. See [Confidential Token](#confidential-token-in-progress).
+  `~/.n8n/stellar-confidential`. See [Confidential Token](#confidential-token).
 
 ## Try it without installing
 
@@ -536,7 +536,9 @@ The output item has `account`, `asset`, `balance`, `spendable`, `threshold`, `co
 with the balance and the threshold when it isn't. An account without a trustline for the asset fails
 the poll.
 
-### Confidential Token (in progress)
+### Confidential Token
+
+**In progress.**
 
 <!-- CT-STATUS: this section describes the node as of commit 53a0d1a (Register). Update it when
 tickets #94 and #95 close. -->
@@ -557,9 +559,9 @@ Parameters:
 - **Network** (`network`): only Testnet.
 - **RPC URL** (`rpcUrl`): optional, with the rules of **Horizon URL**. Empty, the node uses SDF's
   Testnet RPC, `https://soroban-testnet.stellar.org`.
-- **Token Contract**, **Verifier Contract** and **Auditor Contract**: the contracts' `C` addresses,
-  required and without a default, so that the node never works on a deployment the user didn't
-  choose.
+- **Token Contract** (`confidentialContract`), **Verifier Contract** (`verifierContract`) and
+  **Auditor Contract** (`auditorContract`): the contracts' `C` addresses, required and without a
+  default, so that the node never works on a deployment the user didn't choose.
 - **State Folder** (`stateFolder`): where the node keeps each account's encrypted state and the
   setup file its proofs need. Empty, `~/.n8n/stellar-confidential`. Keep it: the RPC keeps contract
   events for 7 days at most, as Stellar's
@@ -568,12 +570,12 @@ Parameters:
 - **Threads** (`threads`): how many threads proof generation uses. 1 by default.
 
 **Register** adds **Auditor ID** (`auditorId`, 0 by default): the auditor, in the token's auditor
-registry, that the account registers with. Its output has `account`, `token`, `registered`,
-`alreadyRegistered`, `txHash`, `ledger`, `syncedLedger` and `networkName`. An account that is
-already registered with the same key isn't registered again: nothing is sent, and
-`alreadyRegistered` is `true`. An account registered with another key fails the item. The tokens of
-the demo deployment are compliant tokens with an allowlist: the demo registers only accounts that
-the token's administrator allowed first.
+registry, that can read the account's amounts. It is chosen when the account registers and can't be
+changed later. Its output has `account`, `token`, `registered`, `alreadyRegistered`, `txHash`,
+`ledger`, `syncedLedger` and `networkName`. An account that is already registered with the same key
+isn't registered again: nothing is sent, and `alreadyRegistered` is `true`. An account registered
+with another key fails the item. The tokens of the demo deployment are compliant tokens with an
+allowlist: the demo registers only accounts that the token's administrator allowed first.
 
 The node makes its proofs inside the n8n installation, with the copy of the Stellar Confidential
 Token SDK in `vendor/` ([VENDORED.md](vendor/stellar-confidential-token-sdk/VENDORED.md)). Before
@@ -625,7 +627,9 @@ so these limits guard against mistakes, not against that person. The limit that 
 account: use one with only the funds the workflow needs.
 [CREDENTIALS.md](CREDENTIALS.md#limit-what-the-node-signs) has the details.
 
-### Confidential Token Holder API (in progress)
+### Confidential Token Holder API
+
+**In progress.**
 
 The Confidential Token node uses the **Confidential Token Holder API** credential
 (`confidentialTokenHolderApi`). Its **Secret Key** is the holder's Stellar secret key, and it gives
@@ -647,17 +651,17 @@ don't show amounts. The node applies these limits from Transfer and Withdraw on.
   For these nodes that data includes addresses and amounts, and, for the Confidential Token node,
   the amounts and balances it decrypts. These nodes don't ask you to stop saving executions: without
   the history, you can't see whether a workflow worked. Keep in mind who can read it:
-  - n8n can hide that data, but only on n8n Enterprise (Cloud or self-hosted), from n8n 2.16.0, with
-    the workflow settings **Redact production execution data** and **Redact manual execution data**
+  - On n8n Enterprise (Cloud or self-hosted), from n8n 2.16.0, turn on the workflow settings
+    **Redact production execution data** and **Redact manual execution data** in the workflows that
+    use the Confidential Token node
     ([Redact execution data](https://docs.n8n.io/deploy/host-n8n/configure-n8n/security/redact-execution-data/)).
-    The same page warns that redaction is "not a backend access control" and that it "doesn't
-    encrypt or change execution data in the database": anyone with direct access to the database can
-    still read the data.
+    Redaction exists only on Enterprise. The same page warns that redaction is "not a backend access
+    control" and that it "doesn't encrypt or change execution data in the database": anyone with
+    direct access to the database can still read the data.
   - On other editions, the data stays in the executions as n8n saved it.
-- **Confidential Token privacy.** Stellar's
-  [privacy page](https://developers.stellar.org/docs/build/apps/privacy#confidential-tokens) warns:
-  "The current verifier accepts only non-zero-knowledge UltraHonk proofs, so OpenZeppelin does not
-  guarantee that proofs keep balances and amounts private."
+- **Confidential Token privacy.** Stellar's documentation warns that the current verifier doesn't
+  guarantee that balances and amounts stay private: see the quote in
+  [Confidential Token](#confidential-token).
 - **Keys.** Each secret key lives in its own credential and only one node reads it. Use a separate
   account for each workflow, with only the funds it needs, and try workflows on Testnet first.
 
@@ -668,22 +672,24 @@ This section says plainly what was tested and what wasn't, as of 25-10-2026.
 - **Up to commit `14888e1`** (the Stellar Signer, the Stellar node, the Stellar Trigger, and the
   copy of the Confidential Token SDK), the package has an automated suite of 879 tests with
   `node:test`, kept outside this repository. It loads the compiled package with a fake n8n context,
-  and the submission tests use a local fake Horizon. 12 of them run only on request: real runs on
-  Testnet, and waits of 60 seconds.
+  and the submission tests use a local fake Horizon. 867 run by default; 11 more run on request
+  (real runs on Testnet, and waits of 60 seconds), and one waits for a text that isn't written yet.
 - **After `14888e1`**, the Confidential Token work is tested only end to end on Testnet, by choice:
-  no new tests went into the suite before the event. Its encrypted state, account lock, policy and
-  RPC submission were checked with scripts, and a real submission went through on Testnet (see
-  [ARCHITECTURE.md](ARCHITECTURE.md#evidence-on-testnet)).
+  the only tests added to the suite are opt-in runs on Testnet, and no local tests were added before
+  26-10-2026. Its encrypted state, account lock, policy and RPC submission were also checked with
+  scripts. The Testnet transactions are in [ARCHITECTURE.md](ARCHITECTURE.md#evidence-on-testnet).
   <!-- CT-STATUS: add the end-to-end Testnet results of Register, Deposit, Merge, Get Balance,
   Transfer and Withdraw here as tickets #93-#95 close. -->
 - **Not tested yet:** the RPC answers that can't be caused on request (`TRY_AGAIN_LATER`,
   `DUPLICATE`, a transaction that stays pending, a failed one, an RPC that times out), which were
-  checked only with made-up answers; the rules for **RPC URL**; and an automated check that no
-  Confidential Token error carries a secret. The local tests for all of this come after the event,
-  in the project's ticket #104.
-- **In n8n itself:** the demo payment ran from n8n's engine on Testnet, from the command line, not
-  on n8n's screen. The Stellar Trigger is tested with the test harness, but it wasn't seen polling
-  inside n8n.
+  checked only with made-up answers; the rules for **RPC URL**; an automated check that no
+  Confidential Token error carries a secret; two Confidential Token runs at the same time inside n8n
+  (the account lock was checked only with two calls in one process); and restoring an archived
+  account. The local tests for all of this come after HackMeridian 2026, in ticket #104 of the
+  project's own tracker.
+- **In n8n itself:** the demo payment and a Confidential Token **Register** ran from n8n's engine on
+  Testnet, from the command line, not on n8n's screen. The Stellar Trigger is tested with the test
+  harness, but it wasn't seen polling inside n8n.
 - **Public network:** no real payment on the public network was tested.
 
 ## Architecture and prior work
