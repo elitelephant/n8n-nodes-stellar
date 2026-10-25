@@ -287,10 +287,47 @@ export type Balance = {
 	limit: string | null;
 };
 
+// An account as Horizon has it now, with the base reserve of the last ledger, the minimum balance
+// that reserve gives it, and its balances.
+export interface AccountBalances {
+	account: Horizon.AccountResponse;
+	reserve: bigint;
+	minimumBalance: bigint;
+	balances: Balance[];
+}
+
+// Reads an account and what it holds, as Account › Get and the Stellar Trigger give it. An account
+// that doesn't exist on the network fails. The address goes in the description: n8n replaces a
+// message that happens to contain one of Node's error codes, and an address can.
+export async function findBalances(
+	node: INode,
+	horizon: Horizon.Server,
+	accountId: string,
+	networkName: NetworkName,
+	itemIndex: number | undefined,
+): Promise<AccountBalances> {
+	const account = await findAccount(
+		node,
+		horizon,
+		accountId,
+		"Couldn't read the account",
+		itemIndex,
+	);
+	if (account === undefined) {
+		throw new NodeOperationError(node, `The account doesn't exist on ${networkName}`, {
+			itemIndex,
+			description: `Horizon has no account ${accountId} on ${networkName}. Check 'Account' and 'Network'. An account exists only after another account creates it with XLM; on testnet, Friendbot can create it.`,
+		});
+	}
+	const reserve = BigInt(await baseReserve(node, horizon, itemIndex));
+	const minimumBalance = minimumBalanceOf(account, reserve);
+	return { account, reserve, minimumBalance, balances: balancesOf(account, minimumBalance) };
+}
+
 // The XLM an account has to keep, in stroops, as Stellar's docs give it: two base reserves, one
 // more for each subentry and each entry it sponsors for another account, and one less for each of
 // its entries that another account sponsors.
-export function minimumBalanceOf(account: Horizon.AccountResponse, reserve: bigint): bigint {
+function minimumBalanceOf(account: Horizon.AccountResponse, reserve: bigint): bigint {
 	const entries = 2 + account.subentry_count + account.num_sponsoring - account.num_sponsored;
 	return BigInt(entries) * reserve;
 }
@@ -298,7 +335,7 @@ export function minimumBalanceOf(account: Horizon.AccountResponse, reserve: bigi
 // One balance per asset, XLM first and then the trustlines in Horizon's order. Liquidity pool
 // shares aren't listed. What the account can spend is its balance minus what its sell offers
 // commit, and, for XLM, minus its minimum balance too. It is never below zero.
-export function balancesOf(account: Horizon.AccountResponse, minimumBalance: bigint): Balance[] {
+function balancesOf(account: Horizon.AccountResponse, minimumBalance: bigint): Balance[] {
 	const balances: Balance[] = [];
 	for (const line of account.balances) {
 		const asset = assetOfBalance(line);

@@ -3,13 +3,7 @@ import { NodeOperationError } from 'n8n-workflow';
 import { extractBaseAddress, StrKey } from '@stellar/stellar-sdk';
 
 import { fromStroops } from '../../../shared/amount';
-import {
-	balancesOf,
-	baseReserve,
-	findAccount,
-	horizonFor,
-	minimumBalanceOf,
-} from '../../transport/horizon';
+import { findBalances, horizonFor } from '../../transport/horizon';
 import { readNetwork } from '../common';
 import { forEachItem } from '../forEachItem';
 
@@ -45,26 +39,16 @@ export async function execute(this: IExecuteFunctions, node: INode): Promise<INo
 			readAccount(node, this.getNodeParameter('account', itemIndex), itemIndex),
 		);
 
-		const account = await findAccount(
+		const { account, reserve, minimumBalance, balances } = await findBalances(
 			node,
 			horizon,
 			accountId,
-			"Couldn't read the account",
+			networkName,
 			itemIndex,
 		);
-		// The address goes in the description: n8n replaces a message that happens to contain one of
-		// Node's error codes, and an address can.
-		if (account === undefined) {
-			throw new NodeOperationError(node, `The account doesn't exist on ${networkName}`, {
-				itemIndex,
-				description: `Horizon has no account ${accountId} on ${networkName}. Check 'Account' and 'Network'. An account exists only after another account creates it with XLM; on testnet, Friendbot can create it.`,
-			});
-		}
-		const reserve = BigInt(await baseReserve(node, horizon, itemIndex));
-		const minimumBalance = minimumBalanceOf(account, reserve);
 		return {
 			account: accountId,
-			balances: balancesOf(account, minimumBalance),
+			balances,
 			minimumBalance: fromStroops(minimumBalance),
 			baseReserve: fromStroops(reserve),
 			subentryCount: account.subentry_count,
