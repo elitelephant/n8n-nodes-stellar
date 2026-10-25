@@ -58,10 +58,43 @@ of the package.
 ## Changes from upstream
 
 Only these. Any other difference from the upstream commit is a mistake. Each changed line in `src/`
-carries a comment that starts with `n8n-nodes-stellar:`.
+carries a comment that starts with `n8n-nodes-stellar:`, or sits between a
+`n8n-nodes-stellar: begin` comment and a `n8n-nodes-stellar: end` comment.
 
 - `src/chain/{admin,client,contract,events,factory,payload}.ts`: `@stellar/stellar-sdk` is imported
   as `stellar-sdk-14`.
+- `src/chain/client.ts`, `ChainClient.invoke()`: the submission follows the Stellar Signer's rule
+  (D-0219), applied to the RPC (D-0349), in place of upstream's poll every 2 s, up to 60 times:
+
+  | RPC answer                                                            | Result                                                                     |
+  | --------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+  | `sendTransaction` `ERROR`                                             | `rejected`, with the result codes                                          |
+  | `sendTransaction` `TRY_AGAIN_LATER`                                   | `not_submitted`                                                            |
+  | `PENDING`, `DUPLICATE`, an error, no answer, or an answer for another | look the transaction up by its hash at once, then every 5 s for up to 30 s |
+  | `getTransaction` `SUCCESS` with a ledger above 0                      | returned, with its `ledger`                                                |
+  | `getTransaction` `FAILED`                                             | `rejected`, in its ledger                                                  |
+  | `getTransaction` `NOT_FOUND` after 30 s                               | `uncertain`                                                                |
+  | the look-up itself fails or gives something else                      | `uncertain`, without asking again                                          |
+
+  `InvokeResult` gains `ledger`. Every other result throws the new `SubmissionError`, with `outcome`
+  (`rejected`, `not_submitted` or `uncertain`, the new `SubmissionOutcome`), `hash`, a short
+  `message` and a `description`. The texts follow `nodes/StellarSigner/submission.ts`, name the RPC
+  instead of Horizon, and carry no amount, balance or key, nor the server's own words. The
+  simulation, its error text and the rest of the client don't change.
+
+  The sources, read on 25-10-2026, are in a comment in the file: the Stellar docs pages on
+  Stellar-Core's `PENDING`, `DUPLICATE`, `ERROR` and `TRY_AGAIN_LATER`
+  (`data/apis/horizon/api-reference/errors/error-handling#async-transaction-submission`), on how
+  Core's answer reaches the user through the RPC
+  (`learn/fundamentals/contract-development/errors-and-debugging/debugging-errors`) and on the
+  transaction result codes (`data/apis/horizon/api-reference/errors/result-codes/transactions`),
+  read with Stellar Raven; and the RPC's `sendTransaction` and `getTransaction` method pages
+  (`data/apis/rpc/api-reference/methods/`), read with WebFetch because Raven doesn't index them.
+
+  The SDK's `rpc.Server` has no time limit and follows redirects. The node has to set both on
+  `server.httpClient.defaults` (`timeout`, `maxRedirects = 0`), as `nodes/shared/horizon.ts` does
+  for Horizon. `invoke()` reads that time limit only to name it in a text.
+
 - `src/proving/artifacts.ts`: the circuits folder is found with `__dirname` instead of
   `import.meta.url`, which CommonJS does not have.
 - `additions/globals.d.ts`, added: types for the two browser globals the SDK names, `crypto` and
