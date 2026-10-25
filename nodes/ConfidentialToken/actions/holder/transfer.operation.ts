@@ -1,4 +1,5 @@
 import type { IExecuteFunctions, INode, INodeExecutionData, INodeProperties } from 'n8n-workflow';
+import { NodeOperationError } from 'n8n-workflow';
 
 import {
 	buildTransferWitness,
@@ -84,7 +85,7 @@ export async function execute(this: IExecuteFunctions, node: INode): Promise<INo
 				// prepareSpend gives the recipient and both auditor keys for a transfer.
 				const { recipient, recipientAuditorKey } = plan;
 				if (recipient === undefined || recipientAuditorKey === undefined) {
-					throw new Error('The transfer has no recipient');
+					throw new NodeOperationError(node, 'The transfer has no recipient', { itemIndex });
 				}
 				const witness = buildTransferWitness({
 					keys,

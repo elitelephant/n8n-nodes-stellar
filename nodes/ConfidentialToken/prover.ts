@@ -50,6 +50,13 @@ export async function withProver<T>(
 	const prover = new CircuitProver(loadCircuit(circuit));
 	try {
 		return await run(prover);
+	} catch {
+		// What noir and bb.js throw while proving can carry values of the witness, which are amounts
+		// and balances (ADR 0102, rule 6), so it isn't kept, not even as the cause.
+		throw Object.assign(new Error("Couldn't build the proof"), {
+			description:
+				'The proof for this item could not be generated, so nothing was signed or sent. Run the item again; if it fails again, check that the state folder and its CRS are intact.',
+		});
 	} finally {
 		await prover.destroy();
 	}

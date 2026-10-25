@@ -200,6 +200,23 @@ export function sdkErrorOf(
 	error: unknown,
 	itemIndex: number,
 ): NodeOperationError | undefined {
+	// The SDK 14 RPC clients throw plain JSON-RPC objects, `{ code, message }`, when a read fails
+	// (getHealth, getContractData, simulateTransaction). The server's text isn't repeated: it can
+	// carry the request, and with it amounts.
+	if (typeof error === 'object' && error !== null && !(error instanceof Error)) {
+		const { code } = error as { code?: unknown };
+		if (typeof code === 'number') {
+			return new NodeOperationError(node, 'The RPC server returned an error', {
+				itemIndex,
+				description: `The RPC server answered with error code ${code}. Check the RPC URL, the contract addresses and the network, then run the node again.`,
+			});
+		}
+		return new NodeOperationError(node, 'The RPC server returned an unexpected answer', {
+			itemIndex,
+			description:
+				'The RPC server answered with something the node could not read. Check the RPC URL, the contract addresses and the network, then run the node again.',
+		});
+	}
 	if (!(error instanceof Error) || error instanceof NodeOperationError) {
 		return undefined;
 	}
