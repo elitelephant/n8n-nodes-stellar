@@ -10,15 +10,17 @@ Lisbon time is UTC+0, the time zone of the commit dates below.
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 11-07-2025               | Joaquín Soza ([`yripper/n8n-nodes-stellar`](https://github.com/yripper/n8n-nodes-stellar)) publishes `n8n-nodes-stellar` 0.1.0 and 0.1.1 on npm: one node, the **Stellar Signer**, which signs a transaction with a secret key kept in an n8n credential.                                                                                                  |
 | 04-10-2026 to 16-10-2026 | This fork ([`elitelephant/n8n-nodes-stellar`](https://github.com/elitelephant/n8n-nodes-stellar)) maintains the Signer: `@n8n/node-cli`, `@stellar/stellar-sdk` 17.1.0 and fixes that keep version 1 of the node. Joaquín merges it as [PR #1](https://github.com/yripper/n8n-nodes-stellar/pull/1) on 16-10-2026 and publishes 0.2.0 on npm the same day. |
+| 09-10-2026               | The plan for new nodes, without code: one node per Stellar API, a **Stellar** node over Horizon with resources and operations, a **Stellar Trigger** that polls, and the layout of their code.                                                                                                                                                             |
 | 10-10-2026 to 18-10-2026 | The fork adds to the Signer the submission to Horizon with its outcomes (`rejected`, `not_submitted`, `uncertain`), the signing policy in the credential, and Sign Message. It is [PR #2](https://github.com/yripper/n8n-nodes-stellar/pull/2), open since 18-10-2026 (Chile time). Its last commit is `8100935`.                                          |
 | 13-10-2026               | The fork, with that work as it stood then, is submitted to the Find Your Way hackathon.                                                                                                                                                                                                                                                                    |
 
-So, before HackMeridian, the package had one node, the Stellar Signer.
+So, before HackMeridian, the package had one node, the Stellar Signer, and a plan for the others.
 
 ## During the event
 
-Everything below was built from 25-10-2026 at 09:00 Lisbon time. The design decisions behind it were
-also taken that day, during the event.
+Everything below was built from 25-10-2026 at 09:00 Lisbon time. That day the project also chose
+which of the planned operations to build for the event, and took the design decisions of the
+Confidential Token node.
 
 ### The Stellar node and the Stellar Trigger
 
@@ -72,25 +74,19 @@ auditor key of its own, a factory, and three tokens. [ARCHITECTURE.md](ARCHITECT
 ### The demo, from n8n
 
 - The supplier invoice workflow of [`examples/`](examples/) ran from n8n's engine on Testnet and
-  paid invoice `INV-1001` (transaction
-  `4d5f6d52c8b7fae8c81a2ee6dbacd33710313105287d4a5d51fb540dc48cac0a`, ledger 5387451). Its second
-  run found the invoice paid and skipped it.
-- The Confidential Token node registered a new account from n8n's engine on Testnet (transaction
-  `bed12f3bbab810cc87a27b8da20d98269b862037bc1e61c954c855dfa74b5158`, ledger 5388060).
+  paid invoice `INV-1001`. Its second run found the invoice paid and skipped it.
+- The Confidential Token node registered a new account from n8n's engine on Testnet.
+
+Their transactions are in [ARCHITECTURE.md](ARCHITECTURE.md#evidence-on-testnet).
 
 ### Documentation
 
-| Time  | Commit    | What                                                                    |
-| ----- | --------- | ----------------------------------------------------------------------- |
-| 21:43 | `7061161` | docs(package): add the demo workflows as examples                       |
-| 21:43 | `10b8911` | docs(package): describe the four nodes, the demo and the testing status |
-| 21:46 | `3143571` | docs(package): add the architecture, the deployment and the evidence    |
-
-This file, `AGENTS.md` and later changes to the documents come after these.
+The documents and the examples start at 21:43 with `7061161`. Their commits are the ones whose
+message starts with `docs(package)`.
 
 ## Where to look
 
 - [README.md](README.md): the four nodes, installation, the demo, and the
   [testing status](README.md#testing-status).
 - [ARCHITECTURE.md](ARCHITECTURE.md): the Stellar APIs, the contracts and the evidence on Testnet.
-- `git log --since="2026-10-25T09:00"` on this repository lists every commit of the event.
+- `git log --since="2026-10-25T09:00Z"` on this repository lists every commit of the event.
