@@ -85,22 +85,33 @@ credential field:
 
 ## Try it without installing
 
-A public n8n instance, n8n 2.25.6 Community, runs these nodes on Testnet at
-[demo.elitelephant.dev](https://demo.elitelephant.dev), so you can try them without installing
-anything. It was set up for the HackMeridian 2026 judges.
+A public n8n instance, n8n 2.25.6 Community, runs these nodes on Testnet, so you can try them
+without installing anything. It was set up for the HackMeridian 2026 judges. One person pays from a
+form while another watches the run, on the same computer in two tabs or on two computers:
+
+| Page                                                                   | What it does                                                         |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| [invoice.elitelephant.dev](https://invoice.elitelephant.dev)           | Pays a supplier invoice from a form                                  |
+| [confidential.elitelephant.dev](https://confidential.elitelephant.dev) | Pays it from a confidential balance                                  |
+| [live.elitelephant.dev](https://live.elitelephant.dev)                 | Shows each run step by step, and what reaches Stellar, as it happens |
+| [demo.elitelephant.dev](https://demo.elitelephant.dev)                 | The n8n editor, with the workflows and every execution (login below) |
+
+None of the first three needs a login.
 
 ### Pay an invoice from a form
 
-Open [demo.elitelephant.dev/form/pay-invoice](https://demo.elitelephant.dev/form/pay-invoice); it
-needs no login. Enter an invoice number and an amount in XLM. The form runs the supplier payment
-workflow: it checks that the invoice wasn't paid, builds the payment, signs and submits it with the
-Stellar Signer, and shows one of three answers:
+Open [invoice.elitelephant.dev](https://invoice.elitelephant.dev). Enter an invoice reference and an
+amount in XLM. The form runs the supplier payment workflow: it checks that the invoice wasn't paid,
+builds the payment with the reference as its memo, signs and submits it with the Stellar Signer, and
+shows one of three answers:
 
 | Answer                         | When                                                                                                                                                                                                                                         |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "Paid on Stellar Testnet"      | The payment went through. It gives the transaction hash, the ledger and a "View it on stellar.expert" link to the transaction.                                                                                                               |
-| "This invoice is already paid" | The same invoice and amount were already paid, so nothing was sent. It gives the earlier transaction.                                                                                                                                        |
+| "Paid"                         | The payment went through. It gives the ledger and a "View the transaction on stellar.expert" link.                                                                                                                                           |
+| "This invoice is already paid" | The same invoice and amount were already paid, so nothing was sent. It links to the earlier transaction.                                                                                                                                     |
 | "Not paid"                     | Something stopped the payment, and the answer says what. The payer's credential has a **Maximum Amounts** of `XLM=100`, so for 150 XLM the Stellar Signer refuses it before signing: "Operation 1 sends more than 'Maximum Amounts' allows". |
+
+Each answer ends with links to pay another invoice and to watch it on live.elitelephant.dev.
 
 Things to try:
 
@@ -114,17 +125,24 @@ Things to try:
 
 ### Pay confidentially from a form
 
-Open
-[demo.elitelephant.dev/form/pay-confidential](https://demo.elitelephant.dev/form/pay-confidential);
-it needs no login either. Enter an invoice number and an amount in XLM. The workflow pays the
-supplier with the Confidential Token node, from the payer's confidential balance: the node builds a
-proof inside n8n and submits the transfer through Stellar RPC, so the amount goes on the chain
-encrypted. The current verifier doesn't accept zero-knowledge proofs, so privacy isn't guaranteed
-yet: see the warning in [Confidential Token](#confidential-token). In our tests a payment took about
-20 to 25 seconds. The answer is "Paid confidentially on Stellar Testnet", with the transaction hash,
-the ledger and a link to stellar.expert, or "Not paid" with the reason. The payer's credential has
-the same limits as the public payment's: up to 100 XLM, to the demo's supplier only, checked on the
-plain amount before the proof. For 150 XLM the answer is "Transfer is over 'Maximum Amounts'".
+Open [confidential.elitelephant.dev](https://confidential.elitelephant.dev). Enter an invoice
+reference and an amount in XLM. The workflow pays the supplier with the Confidential Token node,
+from the payer's confidential balance: the node builds a proof inside n8n and submits the transfer
+through Stellar RPC, so the amount goes on the chain encrypted. The current verifier doesn't accept
+zero-knowledge proofs, so privacy isn't guaranteed yet: see the warning in
+[Confidential Token](#confidential-token). In our tests a payment took about 20 to 25 seconds. The
+answer is "Paid confidentially", with the ledger and a link to the transaction on stellar.expert, or
+"Not paid" with the reason. This form doesn't check whether an invoice was already paid: each
+submission pays. The payer's credential has the same limits as the public payment's: up to 100 XLM,
+to the demo's supplier only, checked on the plain amount before the proof. For 150 XLM the answer is
+"Transfer is over 'Maximum Amounts'".
+
+### Watch it live
+
+Open [live.elitelephant.dev](https://live.elitelephant.dev) next to the form. It shows the newest
+run of either form step by step, as n8n saves each node. For a public payment it also shows the
+supplier's account receiving it; for a confidential one, the contract call that reached the chain,
+with its addresses public and its amount encrypted. It never shows a confidential amount or balance.
 
 In the editor, two more workflows show the rest of the holder's operations. "The payer tops up" runs
 Register and a Deposit of 500 public XLM into the payer's confidential balance; that amount is
