@@ -193,7 +193,9 @@ async function retention(client: ChainClient): Promise<{ oldest: number; latest:
 	return { oldest, latest: health.latestLedger };
 }
 
-// The ledger of a confirmed transaction: the one the SDK reports, or the RPC's record of it.
+// The ledger of a confirmed transaction: the one the SDK reports, or the RPC's record of it. A
+// look-up that fails gives null and doesn't fail the item, as in syncAfterSend: the transaction is
+// already in.
 export async function ledgerOf(
 	client: ChainClient,
 	sent: { hash: string },
@@ -202,7 +204,10 @@ export async function ledgerOf(
 	if (typeof known === 'number' && known > 0) {
 		return known;
 	}
-	const found = await client.server.getTransaction(sent.hash);
+	const found = await client.server.getTransaction(sent.hash).catch(() => null);
+	if (found === null) {
+		return null;
+	}
 	const ledger = (found as { ledger?: unknown }).ledger;
 	return typeof ledger === 'number' && ledger > 0 ? ledger : null;
 }

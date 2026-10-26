@@ -100,7 +100,8 @@ export interface SpendProgress {
 // An item that fails after its automatic merge was applied says so, with the merge's hash: the
 // merge is on the chain, and only the item's output would have named it. The error's own text is
 // kept, and the note goes at the end of its description. An error of the SDK or of the state is
-// turned into the node's own first, so the note isn't lost when forEachItem words it.
+// turned into the node's own first, so the note isn't lost when forEachItem words it, and then it
+// doesn't say that nothing was sent.
 export function failureAfterMerge(
 	holder: HolderContext,
 	error: unknown,
@@ -108,7 +109,7 @@ export function failureAfterMerge(
 ): unknown {
 	const failure =
 		stateErrorOf(holder.node, error, holder.itemIndex) ??
-		sdkErrorOf(holder.node, error, holder.itemIndex) ??
+		sdkErrorOf(holder.node, error, holder.itemIndex, progress.mergeTxHash === null) ??
 		error;
 	if (progress.mergeTxHash === null || typeof failure !== 'object' || failure === null) {
 		return failure;

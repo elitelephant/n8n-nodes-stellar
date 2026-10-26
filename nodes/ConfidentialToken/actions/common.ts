@@ -195,26 +195,35 @@ const NETWORK_ERROR_CODES = [
 // can name amounts (ADR 0102, rule 6), and a network error can carry the RPC address, which can have
 // a key in it (D-0216). A contract's error code becomes the SDK's text for it. Other errors, such as
 // the node's own, keep their text.
+//
+// These errors come from reads, before the item's own transaction is signed: the SDK's submission
+// turns any failure after the signature into a submission error, and the reads after a confirmed
+// submission don't fail the item (ledgerOf, syncAfterSend). So the text says that nothing was
+// signed or sent, unless the caller says otherwise: Transfer and Withdraw may have sent an automatic
+// merge before the read that failed.
 export function sdkErrorOf(
 	node: INode,
 	error: unknown,
 	itemIndex: number,
+	nothingSent = true,
 ): NodeOperationError | undefined {
+	const sent = nothingSent ? ' Nothing was signed or sent.' : '';
 	// The SDK 14 RPC clients throw plain JSON-RPC objects, `{ code, message }`, when a read fails
 	// (getHealth, getContractData, simulateTransaction). The server's text isn't repeated: it can
-	// carry the request, and with it amounts.
+	// carry the request, and with it amounts. The error may not last: Stellar's docs warn that an app
+	// that sends many requests can get "rate-limited by an RPC provider"
+	// (https://developers.stellar.org/docs/data/indexers, read with Stellar Raven on 26-10-2026).
 	if (typeof error === 'object' && error !== null && !(error instanceof Error)) {
 		const { code } = error as { code?: unknown };
 		if (typeof code === 'number') {
 			return new NodeOperationError(node, 'The RPC server returned an error', {
 				itemIndex,
-				description: `The RPC server answered with error code ${code}. Check the RPC URL, the contract addresses and the network, then run the node again.`,
+				description: `The RPC server answered with error code ${code}. This can be temporary, for example when the server limits how many requests it takes: wait a moment and run the node again. If it keeps failing, check the RPC URL, the contract addresses and the network.${sent}`,
 			});
 		}
 		return new NodeOperationError(node, 'The RPC server returned an unexpected answer', {
 			itemIndex,
-			description:
-				'The RPC server answered with something the node could not read. Check the RPC URL, the contract addresses and the network, then run the node again.',
+			description: `The RPC server answered with something the node could not read. Check the RPC URL, the contract addresses and the network, then run the node again.${sent}`,
 		});
 	}
 	if (!(error instanceof Error) || error instanceof NodeOperationError) {
@@ -224,14 +233,13 @@ export function sdkErrorOf(
 		const known = humanizeContractError(error.message);
 		return new NodeOperationError(node, 'The token rejected the operation', {
 			itemIndex,
-			description: `${known ?? 'The RPC simulated the call and the token contract rejected it.'} Nothing was signed or sent.`,
+			description: `${known ?? 'The RPC simulated the call and the token contract rejected it.'}${sent}`,
 		});
 	}
 	if (error.name === 'StateDivergedError') {
 		return new NodeOperationError(node, "The saved state doesn't match the token's balance", {
 			itemIndex,
-			description:
-				"An event was missed or applied twice since the last sync, so the node can't build a proof from this state. Nothing was signed or sent.",
+			description: `An event was missed or applied twice since the last sync, so the node can't build a proof from this state.${sent}`,
 		});
 	}
 	if (error.name === 'StateUnverifiedError') {
