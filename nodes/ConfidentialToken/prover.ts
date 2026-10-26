@@ -15,7 +15,8 @@ const CRS_POINTS = 16385;
 // Runs `run` with a prover for one circuit. The CRS is prepared in `<folder>/crs` before the backend
 // exists: bb.js downloads what is missing from crs.aztec.network, and without the CRS and without
 // network access it rejects after 15 s and leaves its worker alive, which keeps n8n's process from
-// ending. The prover is destroyed when `run` ends, whatever the result.
+// ending. The prover is destroyed when `run` ends, whatever the result, and a failure to destroy it
+// doesn't change that result.
 export async function withProver<T>(
 	folder: string,
 	threads: number,
@@ -58,6 +59,12 @@ export async function withProver<T>(
 				'The proof for this item could not be generated, so nothing was signed or sent. Run the item again; if it fails again, check that the state folder and its CRS are intact.',
 		});
 	} finally {
-		await prover.destroy();
+		// An error of destroy() never replaces the proof's error or its result: it comes from bb.js
+		// too, so its text could carry the same values, and a proof that was built is still good.
+		try {
+			await prover.destroy();
+		} catch {
+			// Nothing else can be done with the prover here.
+		}
 	}
 }
