@@ -15,7 +15,7 @@ import { NETWORK_PASSPHRASES } from '../../../shared/network';
 import {
 	checkConfidentialAmount,
 	checkConfidentialFee,
-	readPolicy,
+	readConfidentialPolicy,
 	type Policy,
 	type PolicyViolation,
 } from '../../../shared/policy';
@@ -36,9 +36,10 @@ function violationError(holder: HolderContext, violation: PolicyViolation): Node
 }
 
 // Reads the policy from the credential, before anything else: a field that can't be read fails the
-// item and never counts as no limit. The wording is the Stellar Signer's (StellarSigner.node.ts).
+// item and never counts as no limit, and neither does a muxed (M) destination, which Transfer can't
+// send to. The wording is the Stellar Signer's (StellarSigner.node.ts).
 export function readHolderPolicy(holder: HolderContext): Policy {
-	const reading = readPolicy(holder.credential);
+	const reading = readConfidentialPolicy(holder.credential);
 	if ('invalid' in reading) {
 		const { field, problem, fix } = reading.invalid;
 		throw new NodeOperationError(

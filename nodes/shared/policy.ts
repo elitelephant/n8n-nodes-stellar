@@ -511,6 +511,37 @@ export function checkMessageSigning(policy: Policy): PolicyViolation | undefined
 // destination go in the description.
 const IN_HOLDER_CREDENTIAL = 'in the Confidential Token Holder API credential';
 const NOT_PROVED = 'This item was not proved, signed or sent.';
+const HOW_TO_WRITE_CONFIDENTIAL_DESTINATIONS =
+	'Write one account address per line: 56 characters starting with G. Transfer sends only to G accounts, so a muxed (M) address would never match a transfer: write the G account it belongs to instead.';
+
+// Reads the holder's policy: the Signer's readPolicy, with one more rule. Transfer takes only a G
+// account as its destination, so a muxed (M) line in Allowed Destinations could never match a
+// transfer, and a policy with only such lines would stop every Transfer. The line fails here
+// instead, where the credential test sees it. A line that isn't an address gets the same text,
+// without the M addresses that the Signer's text offers. The Signer keeps reading M lines.
+export function readConfidentialPolicy(
+	credential: Record<string, unknown> | undefined,
+): PolicyReading {
+	const reading = readPolicy(credential);
+	if ('invalid' in reading) {
+		return reading.invalid.field === LABELS.allowedDestinations
+			? { invalid: { ...reading.invalid, fix: HOW_TO_WRITE_CONFIDENTIAL_DESTINATIONS } }
+			: reading;
+	}
+	const muxed = (linesOf(credential?.allowedDestinations) ?? []).find(({ text }) =>
+		StrKey.isValidMed25519PublicKey(text),
+	);
+	if (muxed !== undefined) {
+		return {
+			invalid: {
+				field: LABELS.allowedDestinations,
+				problem: `has a muxed (M) address (line ${muxed.lineNumber})`,
+				fix: HOW_TO_WRITE_CONFIDENTIAL_DESTINATIONS,
+			},
+		};
+	}
+	return reading;
+}
 
 export interface ConfidentialRequest {
 	operation: 'transfer' | 'withdraw';

@@ -729,8 +729,9 @@ Its limits are written as in the Stellar Wallet API credential, and only **Trans
 - **Maximum Amounts** (`maxAmounts`): the most of each asset that one transfer or withdrawal may
   move, compared with the token's public asset before the node makes the proof. While any limit is
   set, a transfer or withdrawal of an asset without a line fails.
-- **Allowed Destinations** (`allowedDestinations`): the addresses this account may send a transfer
-  to. Only **Transfer** checks it, because a **Withdraw** always goes to the same account.
+- **Allowed Destinations** (`allowedDestinations`): the `G` addresses this account may send a
+  transfer to. Muxed (`M`) addresses are not accepted, because **Transfer** sends only to `G`
+  accounts. Only **Transfer** checks it, because a **Withdraw** always goes to the same account.
 - **Maximum Fee** (`maxFee`): the highest total fee of one **Transfer** or **Withdraw**, in stroops,
   checked after the node simulates each transaction and before it signs it. It adds up every
   transaction the item signs, the automatic merge and the transfer or withdrawal, each with its

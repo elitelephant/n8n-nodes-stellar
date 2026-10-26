@@ -10,7 +10,7 @@ import type {
 import { NodeConnectionTypes } from 'n8n-workflow';
 import { Keypair } from '@stellar/stellar-sdk';
 
-import { readPolicy } from '../shared/policy';
+import { readConfidentialPolicy } from '../shared/policy';
 import { commonProperties } from './actions/common';
 import * as holder from './actions/holder/Holder.resource';
 import { router } from './actions/router';
@@ -73,7 +73,8 @@ export class ConfidentialToken implements INodeType {
 			// Reads the secret key and the policy offline: the credential doesn't know the token, so the
 			// account isn't looked up. The SDK's error isn't repeated, because it can carry what was
 			// read, and neither is the value of a policy field. A policy that can't be read stops every
-			// Transfer and Withdraw, so saving the credential warns, as the Stellar Signer's does.
+			// Transfer and Withdraw, so saving the credential warns, as the Stellar Signer's does. A
+			// muxed (M) destination counts as unreadable here, because Transfer sends only to G accounts.
 			async confidentialTokenHolderApiTest(
 				this: ICredentialTestFunctions,
 				credential: ICredentialsDecrypted,
@@ -88,7 +89,7 @@ export class ConfidentialToken implements INodeType {
 							"'Secret Key' isn't a valid Stellar secret key. Enter 56 characters starting with S.",
 					};
 				}
-				const reading = readPolicy(credential.data);
+				const reading = readConfidentialPolicy(credential.data);
 				if ('invalid' in reading) {
 					const { field, problem, fix } = reading.invalid;
 					return { status: 'Error', message: `'${field}' ${problem}. ${fix}` };

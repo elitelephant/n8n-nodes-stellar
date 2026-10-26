@@ -56,7 +56,7 @@ export class ConfidentialTokenHolderApi implements ICredentialType {
 			default: '',
 			placeholder: 'e.g. GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
 			description:
-				'The addresses this account may send a confidential transfer to, one per line. Only Transfer checks it: a Withdraw always goes to this same account. Leave empty to send to any address.',
+				'The G addresses this account may send a confidential transfer to, one per line. Muxed (M) addresses are not accepted, because Transfer sends only to G accounts. Only Transfer checks it: a Withdraw always goes to this same account. Leave empty to send to any address.',
 		},
 		{
 			displayName: 'Maximum Fee',
