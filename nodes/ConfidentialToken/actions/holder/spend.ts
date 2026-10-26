@@ -61,6 +61,9 @@ function feeOf(xdrBase64: string): bigint {
 	}
 }
 
+// Why the fee guard stopped a signature: the fee couldn't be read, or the total is over the limit.
+type FeeLimit = 'unread' | 'over';
+
 // A signer that checks the fee before it signs (D-0348). The SDK hands it the assembled
 // transaction, whose fee is the inclusion fee plus the resource fee from the simulation, with the
 // rent in it. Each fee it sees is added to the item's total, so the automatic merge and the
@@ -76,8 +79,10 @@ function feeGuard(holder: HolderContext, policy: Policy): Signer {
 			total = fee < BigInt(0) ? fee : total + fee;
 			const violation = checkConfidentialFee(policy, total);
 			if (violation !== undefined) {
-				// Marked so prepareSpend can tell the guard from any other error of the merge.
-				throw Object.assign(violationError(holder, violation), { feeLimit: true });
+				// Marked so prepareSpend can tell the guard from any other error of the merge, and a fee
+				// that couldn't be read from one over the limit.
+				const feeLimit: FeeLimit = fee < BigInt(0) ? 'unread' : 'over';
+				throw Object.assign(violationError(holder, violation), { feeLimit });
 			}
 			return await inner.sign(xdrBase64);
 		},
@@ -125,19 +130,22 @@ export function failureAfterMerge(
 
 // The fee guard's text says that a proof was discarded and that an earlier merge may have gone
 // through. When the guard stops the automatic merge neither is true: no proof exists yet and this is
-// the item's first merge. So the error keeps its message and gets a description for this case. Any
-// other error comes back as it is.
+// the item's first merge. So the error keeps its message and gets a description for this case, which
+// says the same as the message: a fee that couldn't be read, or one over the limit. Any other error
+// comes back as it is.
 function feeLimitOfMerge(node: HolderContext['node'], itemIndex: number, error: unknown): unknown {
 	if (typeof error !== 'object' || error === null || !('feeLimit' in error)) {
 		return error;
 	}
+	const unread = error.feeLimit === 'unread';
 	return new NodeOperationError(
 		node,
 		error instanceof Error ? error.message : 'The total fee is over the limit',
 		{
 			itemIndex,
-			description:
-				'The automatic merge this item needed would go over Maximum Fee, so nothing was proved, signed or sent for this item. Raise Maximum Fee, or merge the received balance first with a Merge, which has no fee limit.',
+			description: unread
+				? 'The fee of the automatic merge this item needed could not be read to check it against Maximum Fee, so nothing was proved, signed or sent for this item. Run the item again, or merge the received balance first with a Merge, which has no fee limit.'
+				: 'The automatic merge this item needed would go over Maximum Fee, so nothing was proved, signed or sent for this item. Raise Maximum Fee, or merge the received balance first with a Merge, which has no fee limit.',
 		},
 	);
 }
