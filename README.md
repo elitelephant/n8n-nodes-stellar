@@ -118,12 +118,13 @@ Open
 [demo.elitelephant.dev/form/pay-confidential](https://demo.elitelephant.dev/form/pay-confidential);
 it needs no login either. Enter an invoice number and an amount in XLM. The workflow pays the
 supplier with the Confidential Token node, from the payer's confidential balance: the node builds a
-zero-knowledge proof inside n8n and submits the transfer through Stellar RPC, so the amount goes on
-the chain encrypted. A payment takes about 20 to 30 seconds. The answer is "Paid confidentially on
-Stellar Testnet", with the transaction hash, the ledger and a link to stellar.expert, or "Not paid"
-with the reason. The payer's credential has the same limits as the public payment's: up to 100 XLM,
-to the demo's supplier only, checked on the plain amount before the proof. For 150 XLM the answer is
-"Transfer is over 'Maximum Amounts'".
+proof inside n8n and submits the transfer through Stellar RPC, so the amount goes on the chain
+encrypted. The current verifier doesn't accept zero-knowledge proofs, so privacy isn't guaranteed
+yet: see the warning in [Confidential Token](#confidential-token). In our tests a payment took about
+20 to 25 seconds. The answer is "Paid confidentially on Stellar Testnet", with the transaction hash,
+the ledger and a link to stellar.expert, or "Not paid" with the reason. The payer's credential has
+the same limits as the public payment's: up to 100 XLM, to the demo's supplier only, checked on the
+plain amount before the proof. For 150 XLM the answer is "Transfer is over 'Maximum Amounts'".
 
 In the editor, two more workflows show the rest of the holder's operations. "The payer tops up" runs
 Register and a Deposit of 500 public XLM into the payer's confidential balance; that amount is

@@ -503,7 +503,7 @@ export function checkMessageSigning(policy: Policy): PolicyViolation | undefined
 }
 
 // The Confidential Token node checks the holder's policy on plain amounts, before it makes the
-// zero-knowledge proof, so it has no transaction to decode. It reads the policy with readPolicy:
+// proof, so it has no transaction to decode. It reads the policy with readConfidentialPolicy:
 // the holder's credential has only Maximum Amounts, Allowed Destinations and Maximum Fee, and a
 // field that isn't there reads as no limit. Its texts carry no amounts, whether the amount sent,
 // the limit or the fee: errors and logs of that node never show them. Like the Signer's, the
