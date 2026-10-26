@@ -112,16 +112,35 @@ Things to try:
 - Two payments at the same time: they are processed one after the other, and the same invoice sent
   twice at once is paid once.
 
+### Pay confidentially from a form
+
+Open
+[demo.elitelephant.dev/form/pay-confidential](https://demo.elitelephant.dev/form/pay-confidential);
+it needs no login either. Enter an invoice number and an amount in XLM. The workflow pays the
+supplier with the Confidential Token node, from the payer's confidential balance: the node builds a
+zero-knowledge proof inside n8n and submits the transfer through Stellar RPC, so the amount goes on
+the chain encrypted. A payment takes about 20 to 30 seconds. The answer is "Paid confidentially on
+Stellar Testnet", with the transaction hash, the ledger and a link to stellar.expert, or "Not paid"
+with the reason. The payer's credential has the same limits as the public payment's: up to 100 XLM,
+to the demo's supplier only, checked on the plain amount before the proof. For 150 XLM the answer is
+"Transfer is over 'Maximum Amounts'".
+
+In the editor, two more workflows show the rest of the holder's operations. "The payer tops up" runs
+Register and a Deposit of 500 public XLM into the payer's confidential balance; that amount is
+public, because it leaves the account as plain XLM. "The supplier collects" runs Register, Merge and
+Get Balance, which decrypts the supplier's balance inside n8n. These workflows use Testnet accounts
+of their own, apart from the public payment's.
+
 ### Open the editor
 
 Log in at [demo.elitelephant.dev](https://demo.elitelephant.dev) as a member, with the email
-`demo@elitelephant.dev` and the password `HackMeridian2026`. The editor shows the demo's two
-workflows, the payer's credential and every execution, which n8n keeps by default, so you can follow
-each payment, also the ones answered "Not paid". Several judges can use the account at once. The
-account's email and password, the demo workflows' published versions and their credential can't be
-changed: editing a workflow changes only its draft, not the version that the form runs. You can also
-create workflows of your own and use the credential in them, within its policy: payments of up to
-100 XLM to the demo's supplier account.
+`demo@elitelephant.dev` and the password `HackMeridian2026`. The editor shows the demo's five
+workflows, their three credentials and every execution, which n8n keeps by default, so you can
+follow each payment, also the ones answered "Not paid". Several judges can use the account at once.
+The account's email and password, the demo workflows' published versions and their credentials can't
+be changed: editing a workflow changes only its draft, not the version that a form runs. You can
+also create workflows of your own and use the credentials in them. The two payer credentials only
+pay up to 100 XLM, to the demo's supplier accounts.
 
 In any run, open the **Links for judges** node to see the transaction hash and links to
 stellar.expert and Horizon.
