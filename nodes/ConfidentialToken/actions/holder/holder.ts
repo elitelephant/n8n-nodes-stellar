@@ -233,9 +233,9 @@ export async function tokenInfo(
 	itemIndex: number,
 ): Promise<TokenInfo> {
 	const underlying = await underlyingOf(client, token, node, itemIndex);
-	const name = scValToNative(await client.simulate(underlying, 'name', []));
+	const asset = assetOfName(scValToNative(await client.simulate(underlying, 'name', [])));
 	const decimals = scValToNative(await client.simulate(underlying, 'decimals', []));
-	if (typeof name !== 'string' || (name !== 'native' && !ISSUED_ASSET.test(name))) {
+	if (asset === null) {
 		throw new NodeOperationError(node, "Couldn't tell which asset this token wraps", {
 			itemIndex,
 			description:
@@ -251,7 +251,28 @@ export async function tokenInfo(
 				'The node writes amounts with 7 decimals, as the Stellar node does, and would read this token wrong. Nothing was signed or sent.',
 		});
 	}
-	return { underlying, asset: name === 'native' ? 'XLM' : name, decimals };
+	return { underlying, asset, decimals };
+}
+
+// Only the token's public asset, for an operation that moves no amount, such as Merge: the
+// decimals aren't read, and an asset the node doesn't recognize is null instead of a failure.
+export async function tokenAsset(
+	client: ChainClient,
+	token: string,
+	node: INode,
+	itemIndex: number,
+): Promise<string | null> {
+	const underlying = await underlyingOf(client, token, node, itemIndex);
+	return assetOfName(scValToNative(await client.simulate(underlying, 'name', [])));
+}
+
+// The asset as the policy writes it, from the name its stellar asset contract gives: XLM for
+// native, or CODE:ISSUER. Null for any other name.
+function assetOfName(name: unknown): string | null {
+	if (name === 'native') {
+		return 'XLM';
+	}
+	return typeof name === 'string' && ISSUED_ASSET.test(name) ? name : null;
 }
 
 async function underlyingOf(

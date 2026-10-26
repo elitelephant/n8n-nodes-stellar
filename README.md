@@ -657,7 +657,7 @@ The outputs of Deposit, Merge, Get Balance, Transfer and Withdraw have `account`
 | Operation   | Also                                                                                  |
 | ----------- | ------------------------------------------------------------------------------------- |
 | Deposit     | `asset` (the token's underlying asset), `amount`, `txHash` and `ledger`               |
-| Merge       | `asset`, `txHash` and `ledger`                                                        |
+| Merge       | `asset` (`null` if the node doesn't recognize it), `txHash` and `ledger`              |
 | Get Balance | `asset`, `spendable` and `receiving`, with up to 7 decimals                           |
 | Transfer    | `asset`, `destination`, `amount`, `txHash`, `ledger`, `mergedFirst` and `mergeTxHash` |
 | Withdraw    | `asset`, `amount`, `txHash`, `ledger`, `mergedFirst` and `mergeTxHash`                |
